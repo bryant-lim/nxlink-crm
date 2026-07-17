@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { Terminal, Copy, CheckCircle2 } from 'lucide-react';
 
 export default function ApiDocs() {
