@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 
 // The Netlify function handler
 export default async (req: Request, context: any) => {
@@ -42,17 +43,28 @@ export default async (req: Request, context: any) => {
       next_steps: extractField(rawText, 'Next Steps:'),
       company_name: extractField(rawText, 'Company Name:'),
       email_address: extractField(rawText, 'Email Address:'),
+      tags_string: extractField(rawText, 'Conversation Tag:'),
     };
 
     // If company_name or email_address is 'null', set to null
     if (extractedData.company_name?.toLowerCase() === 'null') extractedData.company_name = null;
     if (extractedData.email_address?.toLowerCase() === 'null') extractedData.email_address = null;
 
+    let conversation_tags: string[] | null = null;
+    if (extractedData.tags_string && extractedData.tags_string.toLowerCase() !== 'null') {
+      conversation_tags = extractedData.tags_string.split(',').map(t => t.trim()).filter(Boolean);
+    }
+
     // 4. Insert into Supabase
     const supabaseUrl = process.env.SUPABASE_URL!;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false },
+      realtime: {
+        transport: WebSocket
+      }
+    });
 
     const { data, error } = await supabase
       .from('conversations')
@@ -63,6 +75,7 @@ export default async (req: Request, context: any) => {
           next_steps: extractedData.next_steps,
           company_name: extractedData.company_name,
           email_address: extractedData.email_address,
+          conversation_tags: conversation_tags,
           // Since it's a new ingest, we can set the date/time to now if not provided in the text.
           conversation_date: new Date().toISOString().split('T')[0],
           conversation_time: new Date().toISOString().split('T')[1].split('.')[0],
@@ -92,7 +105,8 @@ function extractField(text: string, label: string): string | null {
     'Conversation Summary:',
     'Next Steps:',
     'Company Name:',
-    'Email Address:'
+    'Email Address:',
+    'Conversation Tag:'
   ];
 
   const startIndex = text.indexOf(label);

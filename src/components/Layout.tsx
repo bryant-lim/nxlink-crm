@@ -32,8 +32,8 @@ export default function Layout() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+      <div className="min-h-screen bg-nx-bg flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-nx-green animate-spin" />
       </div>
     );
   }
@@ -44,14 +44,14 @@ export default function Layout() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-950 flex">
+    <div className="min-h-screen bg-nx-bg flex">
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col hidden md:flex">
-        <div className="h-16 flex items-center px-6 border-b border-slate-800">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
-            <span className="text-white font-bold text-sm">CX</span>
+      <aside className="w-64 bg-nx-card border-r border-gray-200 flex flex-col hidden md:flex">
+        <div className="h-16 flex items-center px-6 border-b border-gray-200">
+          <div className="w-8 h-8 bg-nx-green rounded-lg flex items-center justify-center mr-3">
+            <span className="text-white font-bold text-sm">NX</span>
           </div>
-          <span className="text-lg font-bold text-white tracking-wide">CRM Core</span>
+          <span className="text-lg font-bold text-nx-dark tracking-wide">NXLink CRM</span>
         </div>
         
         <nav className="flex-1 px-4 py-6 space-y-2">
@@ -64,8 +64,8 @@ export default function Layout() {
                 to={item.path}
                 className={`flex items-center px-4 py-3 rounded-xl transition-all ${
                   isActive 
-                    ? 'bg-blue-600/10 text-blue-500 font-medium' 
-                    : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                    ? 'bg-nx-green/10 text-nx-green font-medium' 
+                    : 'text-gray-500 hover:bg-gray-50 hover:text-nx-dark'
                 }`}
               >
                 <Icon size={20} className="mr-3" />
@@ -75,10 +75,10 @@ export default function Layout() {
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-800">
+        <div className="p-4 border-t border-gray-200">
           <button
             onClick={handleLogout}
-            className="flex items-center w-full px-4 py-3 text-slate-400 hover:bg-red-500/10 hover:text-red-400 rounded-xl transition-colors"
+            className="flex items-center w-full px-4 py-3 text-gray-500 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors"
           >
             <LogOut size={20} className="mr-3" />
             Sign Out
@@ -89,9 +89,14 @@ export default function Layout() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-h-screen max-w-full overflow-hidden">
         {/* Mobile Header */}
-        <header className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 md:hidden">
-           <span className="text-lg font-bold text-white tracking-wide">CRM Core</span>
-           <button onClick={handleLogout} className="text-slate-400 hover:text-white">
+        <header className="h-16 bg-nx-card border-b border-gray-200 flex items-center justify-between px-4 md:hidden">
+           <div className="flex items-center">
+             <div className="w-6 h-6 bg-nx-green rounded flex items-center justify-center mr-2">
+               <span className="text-white font-bold text-xs">NX</span>
+             </div>
+             <span className="text-lg font-bold text-nx-dark tracking-wide">NXLink CRM</span>
+           </div>
+           <button onClick={handleLogout} className="text-gray-500 hover:text-nx-dark">
              <LogOut size={20} />
            </button>
         </header>

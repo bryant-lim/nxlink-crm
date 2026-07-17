@@ -15,7 +15,6 @@ export default function Login() {
     setLoading(true);
     setError('');
 
-    // Transform 'admin' to an email since Supabase Auth requires an email
     const email = username === 'admin' ? 'admin@crm.local' : username;
 
     const { error } = await supabase.auth.signInWithPassword({
@@ -32,41 +31,47 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
-      <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-8 backdrop-blur-sm">
+    <div className="min-h-screen flex items-center justify-center bg-nx-bg p-4 relative overflow-hidden">
+      {/* Decorative background shape */}
+      <div className="absolute top-0 right-0 -mr-64 -mt-64 w-[800px] h-[800px] bg-nx-green/5 rounded-full blur-3xl pointer-events-none"></div>
+      
+      <div className="max-w-md w-full bg-nx-card border border-gray-200 rounded-2xl shadow-xl p-8 z-10 relative">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 bg-blue-600/20 text-blue-500 rounded-full flex items-center justify-center mb-4">
-            <LogIn size={32} />
+          <div className="flex items-center mb-6">
+             <div className="w-10 h-10 bg-nx-green rounded-lg flex items-center justify-center mr-3 shadow-sm">
+               <span className="text-white font-bold text-lg">NX</span>
+             </div>
+             <span className="text-2xl font-bold text-nx-dark tracking-wide">NXLink CRM</span>
           </div>
-          <h2 className="text-2xl font-bold text-white">CRM Login</h2>
-          <p className="text-slate-400 text-sm mt-2">Sign in to access your dashboard</p>
+          <h2 className="text-xl font-semibold text-gray-800">Welcome Back</h2>
+          <p className="text-gray-500 text-sm mt-1">Sign in to access your dashboard</p>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-            <p className="text-red-400 text-sm text-center">{error}</p>
+          <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-lg">
+            <p className="text-red-600 text-sm text-center">{error}</p>
           </div>
         )}
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Username</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-nx-green/50 focus:border-nx-green transition-all"
               required
             />
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Password</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-nx-green/50 focus:border-nx-green transition-all"
               required
             />
           </div>
@@ -74,12 +79,14 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-xl transition-colors flex justify-center items-center"
+            className="w-full bg-nx-green hover:bg-nx-green-hover text-white font-medium py-3 px-4 rounded-xl transition-colors flex justify-center items-center shadow-md shadow-nx-green/20"
           >
             {loading ? (
               <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             ) : (
-              'Sign In'
+              <span className="flex items-center">
+                Sign In <LogIn size={18} className="ml-2" />
+              </span>
             )}
           </button>
         </form>

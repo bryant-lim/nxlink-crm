@@ -1,10 +1,11 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #3b82f6;
-  --color-primary-dark: #2563eb;
-  --color-dark-bg: #0f172a;
-  --color-dark-card: #1e293b;
+  --color-nx-green: #90c641;
+  --color-nx-green-hover: #82b43b;
+  --color-nx-dark: #12373c;
+  --color-nx-bg: #f9fbf7;
+  --color-nx-card: #ffffff;
 }
 
 body {
@@ -14,6 +15,6 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--color-dark-bg);
-  color: #f8fafc;
+  background-color: var(--color-nx-bg);
+  color: var(--color-nx-dark);
 }
