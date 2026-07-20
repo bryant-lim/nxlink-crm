@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Loader2, Search, User, Phone, Mail, Calendar, FileText, X } from 'lucide-react';
+import { Loader2, Search, User, Phone, Mail, Calendar, FileText, X, RefreshCw } from 'lucide-react';
 
 interface Conversation {
   id: string;
@@ -23,10 +23,29 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedConvo, setSelectedConvo] = useState<Conversation | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     fetchConversations();
   }, []);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch('/.netlify/functions/sync-nxlink', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert(`Successfully synced ${data.syncedCount} conversations!`);
+        fetchConversations();
+      } else {
+        alert(`Sync failed: ${data.error || 'Unknown error'}`);
+      }
+    } catch (e: any) {
+      alert(`Sync error: ${e.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const fetchConversations = async () => {
     const { data, error } = await supabase
@@ -50,7 +69,17 @@ export default function Dashboard() {
     <div className="h-full flex flex-col relative">
       <div className="flex justify-between items-end mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-nx-dark mb-2">Dashboard</h1>
+          <div className="flex items-center gap-4 mb-2">
+            <h1 className="text-3xl font-bold text-nx-dark">Dashboard</h1>
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="flex items-center gap-2 bg-nx-green hover:bg-nx-green/90 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
+            >
+              <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+              {syncing ? 'Syncing...' : 'Sync NXLINK'}
+            </button>
+          </div>
           <p className="text-gray-500">View and manage imported customer conversations.</p>
         </div>
         <div className="relative w-72">
