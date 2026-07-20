@@ -24,6 +24,7 @@ export default async (req: Request, context: any) => {
       providedKeyEndsWith2026: apiKey?.endsWith('_2026'),
       expectedKeyEndsWith2026: expectedKey?.endsWith('_2026')
     };
+    console.log("Auth Mismatch Details:", debugInfo);
     return new Response(JSON.stringify(debugInfo), { 
       status: 401,
       headers: { 'Content-Type': 'application/json' }
