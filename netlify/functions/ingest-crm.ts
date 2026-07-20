@@ -16,7 +16,18 @@ export default async (req: Request, context: any) => {
   }
 
   if (apiKey !== expectedKey) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+    // temporarily return the lengths of both keys to debug why they don't match
+    const debugInfo = {
+      error: 'Unauthorized',
+      providedKeyLength: apiKey ? apiKey.length : 0,
+      expectedKeyLength: expectedKey ? expectedKey.length : 0,
+      providedKeyEndsWith2026: apiKey?.endsWith('_2026'),
+      expectedKeyEndsWith2026: expectedKey?.endsWith('_2026')
+    };
+    return new Response(JSON.stringify(debugInfo), { 
+      status: 401,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
   try {
