@@ -43,7 +43,9 @@ export default function Dashboard() {
   const filtered = conversations.filter(c => 
     c.customer_sentiment?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.conversation_summary?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.company_name?.toLowerCase().includes(searchTerm.toLowerCase())
+    c.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.phone_number?.includes(searchTerm)
   );
 
   return (
@@ -73,8 +75,9 @@ export default function Dashboard() {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-sm font-medium text-gray-500">
                 <th className="py-4 px-6 whitespace-nowrap">Date</th>
+                <th className="py-4 px-6">Customer</th>
+                <th className="py-4 px-6">Phone</th>
                 <th className="py-4 px-6">Company</th>
-                <th className="py-4 px-6">Contact Email</th>
                 <th className="py-4 px-6">Sentiment</th>
                 <th className="py-4 px-6">Tags</th>
                 <th className="py-4 px-6 w-1/3">Summary</th>
@@ -105,11 +108,14 @@ export default function Dashboard() {
                     </td>
                     <td className="py-4 px-6">
                       <span className="font-semibold text-nx-dark group-hover:text-nx-green transition-colors">
-                        {convo.company_name || 'Unknown Company'}
+                        {convo.customer_name || 'Unknown'}
                       </span>
                     </td>
                     <td className="py-4 px-6 text-sm text-gray-600">
-                      {convo.email_address || '-'}
+                      {convo.phone_number || '-'}
+                    </td>
+                    <td className="py-4 px-6 text-sm text-gray-600">
+                      {convo.company_name || '-'}
                     </td>
                     <td className="py-4 px-6 text-sm">
                       <span className="inline-block truncate max-w-[150px] text-gray-600">
