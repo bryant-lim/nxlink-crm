@@ -160,10 +160,9 @@ export default function Dashboard() {
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <div>
                 <h2 className="text-2xl font-bold text-nx-dark mb-1">
-                  {selectedConvo.company_name || 'No Company Name'}
+                  {selectedConvo.customer_name || selectedConvo.company_name || 'Unknown Customer'}
                 </h2>
                 <div className="flex flex-wrap gap-4 text-sm text-gray-500">
-                  <span className="flex items-center"><User size={14} className="mr-1.5 text-nx-green" /> {selectedConvo.customer_name || 'N/A'}</span>
                   <span className="flex items-center"><Mail size={14} className="mr-1.5 text-nx-green" /> {selectedConvo.email_address || 'N/A'}</span>
                   <span className="flex items-center"><Phone size={14} className="mr-1.5 text-nx-green" /> {selectedConvo.phone_number || 'N/A'}</span>
                   <span className="flex items-center"><Calendar size={14} className="mr-1.5 text-nx-green" /> {selectedConvo.conversation_date} {selectedConvo.conversation_time}</span>

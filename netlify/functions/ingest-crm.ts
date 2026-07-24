@@ -99,19 +99,50 @@ export default async (req: Request, context: any) => {
 
     let conversation_tags: string[] | null = null;
     if (extractedData.tags_string && extractedData.tags_string.toLowerCase() !== 'null') {
-      const tagStr = extractedData.tags_string;
+      let tagStr = extractedData.tags_string.trim();
       
-      // If it looks like a JSON array of objects e.g. [{"id":123,"name":"Tag"}]
-      if (tagStr.includes('"name":')) {
-        const nameRegex = /"name":"([^"]+)"/g;
+      // Clean up trailing junk like '"} }' that the 3rd party tool might inject
+      tagStr = tagStr.replace(/["'}\s]+$/, '');
+      
+      // Attempt 1: Parse as JSON array if it contains '[' and ']'
+      if (tagStr.includes('[') && tagStr.includes(']')) {
+        try {
+          const arrayStr = tagStr.substring(tagStr.indexOf('['), tagStr.lastIndexOf(']') + 1);
+          // Sometimes stringified JSON has escaped quotes inside a string.
+          // Let's just try to parse it directly.
+          let parsed;
+          try { 
+            parsed = JSON.parse(arrayStr); 
+          } catch { 
+            // Fallback for badly escaped strings
+            parsed = JSON.parse(arrayStr.replace(/\\"/g, '"')); 
+          }
+          
+          if (Array.isArray(parsed)) {
+            const names = parsed.map((item: any) => item.name || item.value || item).filter(Boolean);
+            if (names.length > 0) {
+              conversation_tags = names.map(n => String(n).trim());
+            }
+          }
+        } catch (e) {
+          // Ignore parse errors, fallback to regex
+        }
+      }
+
+      // Attempt 2: Permissive Regex
+      if (!conversation_tags) {
+        // match name:"value", "name": "value", \"name\": \"value\"
+        const nameRegex = /(?:\\?"|')name(?:\\?"|')\s*:\s*(?:\\?"|')([^"']+)(?:\\?"|')/g;
         const matches = [...tagStr.matchAll(nameRegex)];
         if (matches.length > 0) {
           conversation_tags = matches.map(match => match[1].trim());
         }
-      } 
+      }
       
-      // Fallback to comma separated
+      // Fallback 3: Comma separated (only if it doesn't look like a JSON array at all)
       if (!conversation_tags) {
+        // Remove brackets if they somehow exist
+        tagStr = tagStr.replace(/[\[\]{}"\\]/g, '');
         conversation_tags = tagStr.split(',').map(t => t.trim()).filter(Boolean);
       }
     }
