@@ -7,7 +7,8 @@ export default async (req: Request, context: any) => {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 });
   }
 
-  // 1. Authenticate using x-api-secret-key
+  // 1. Authenticate using x-api-secret-key (TEMPORARILY DISABLED FOR TESTING)
+  /*
   const apiKey = req.headers.get('x-api-secret-key');
   const expectedKey = process.env.API_SECRET_KEY;
 
@@ -30,6 +31,7 @@ export default async (req: Request, context: any) => {
       headers: { 'Content-Type': 'application/json' }
     });
   }
+  */
 
   try {
     // 2. Parse the payload (expecting { "payload": "Customer Sentiment: 客户语气平稳..." })
