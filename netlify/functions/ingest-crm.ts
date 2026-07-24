@@ -39,11 +39,21 @@ export default async (req: Request, context: any) => {
     const contentType = req.headers.get('content-type') || '';
     let rawText = '';
 
+    // Read the body as plain text first so we don't crash if they send malformed JSON
+    const rawBody = await req.text();
+
     if (contentType.includes('application/json')) {
-      const body = await req.json();
-      rawText = body.payload || body.text || '';
+      try {
+        const body = JSON.parse(rawBody);
+        rawText = body.payload || body.text || rawBody;
+      } catch (e) {
+        // 3rd party tool injected unescaped quotes causing invalid JSON.
+        // Fallback: just use the raw, unparsed string! 
+        // Our extractField will still find "Customer Sentiment:" inside it anyway.
+        rawText = rawBody;
+      }
     } else {
-      rawText = await req.text();
+      rawText = rawBody;
     }
 
     if (!rawText) {
