@@ -7,8 +7,7 @@ export default async (req: Request, context: any) => {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 });
   }
 
-  // 1. Authenticate using x-api-secret-key (TEMPORARILY DISABLED FOR TESTING)
-  /*
+  // 1. Authenticate using x-api-secret-key
   const apiKey = req.headers.get('x-api-secret-key');
   const expectedKey = process.env.API_SECRET_KEY;
 
@@ -31,7 +30,6 @@ export default async (req: Request, context: any) => {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-  */
 
   try {
     // 2. Parse the payload (expecting { "payload": "Customer Sentiment: 客户语气平稳..." })
@@ -58,11 +56,15 @@ export default async (req: Request, context: any) => {
       company_name: extractField(rawText, 'Company Name:'),
       email_address: extractField(rawText, 'Email Address:'),
       tags_string: extractField(rawText, 'Conversation Tag:'),
+      customer_name: extractField(rawText, 'Customer Name:'),
+      phone_number: extractField(rawText, 'Phone Number:'),
     };
 
-    // If company_name or email_address is 'null', set to null
+    // If fields are 'null', set to null
     if (extractedData.company_name?.toLowerCase() === 'null') extractedData.company_name = null;
     if (extractedData.email_address?.toLowerCase() === 'null') extractedData.email_address = null;
+    if (extractedData.customer_name?.toLowerCase() === 'null') extractedData.customer_name = null;
+    if (extractedData.phone_number?.toLowerCase() === 'null') extractedData.phone_number = null;
 
     let conversation_tags: string[] | null = null;
     if (extractedData.tags_string && extractedData.tags_string.toLowerCase() !== 'null') {
@@ -84,6 +86,8 @@ export default async (req: Request, context: any) => {
       .from('conversations')
       .insert([
         {
+          customer_name: extractedData.customer_name,
+          phone_number: extractedData.phone_number,
           customer_sentiment: extractedData.customer_sentiment,
           conversation_summary: extractedData.conversation_summary,
           next_steps: extractedData.next_steps,
@@ -120,7 +124,9 @@ function extractField(text: string, label: string): string | null {
     'Next Steps:',
     'Company Name:',
     'Email Address:',
-    'Conversation Tag:'
+    'Conversation Tag:',
+    'Customer Name:',
+    'Phone Number:'
   ];
 
   const startIndex = text.indexOf(label);
