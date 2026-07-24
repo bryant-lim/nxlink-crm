@@ -34,13 +34,32 @@ export default async (req: Request, context: any) => {
   */
 
   try {
-    // 2. Parse the payload (expecting { "payload": "Customer Sentiment: 客户语气平稳..." })
-    // If the 3rd party sends pure text, we can do req.text(). Let's handle both.
+    // 2. Read the body as plain text first so we don't crash if they send malformed JSON
     const contentType = req.headers.get('content-type') || '';
-    let rawText = '';
-
-    // Read the body as plain text first so we don't crash if they send malformed JSON
     const rawBody = await req.text();
+
+    const supabaseUrl = process.env.SUPABASE_URL!;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false },
+      realtime: { transport: WebSocket }
+    });
+
+    // 2.5 Try to log the raw incoming request
+    let logId: string | null = null;
+    try {
+      const { data, error } = await supabase
+        .from('webhook_logs')
+        .insert([{ raw_payload: rawBody, status: 'Processing' }])
+        .select('id')
+        .single();
+      if (data && !error) logId = data.id;
+    } catch (e) {
+      console.warn('Skipping webhook_log insert (table might not exist yet):', e);
+    }
+
+    let rawText = '';
 
     if (contentType.includes('application/json')) {
       try {
@@ -80,20 +99,24 @@ export default async (req: Request, context: any) => {
 
     let conversation_tags: string[] | null = null;
     if (extractedData.tags_string && extractedData.tags_string.toLowerCase() !== 'null') {
-      conversation_tags = extractedData.tags_string.split(',').map(t => t.trim()).filter(Boolean);
+      const tagStr = extractedData.tags_string;
+      
+      // If it looks like a JSON array of objects e.g. [{"id":123,"name":"Tag"}]
+      if (tagStr.includes('"name":')) {
+        const nameRegex = /"name":"([^"]+)"/g;
+        const matches = [...tagStr.matchAll(nameRegex)];
+        if (matches.length > 0) {
+          conversation_tags = matches.map(match => match[1].trim());
+        }
+      } 
+      
+      // Fallback to comma separated
+      if (!conversation_tags) {
+        conversation_tags = tagStr.split(',').map(t => t.trim()).filter(Boolean);
+      }
     }
 
     // 4. Insert into Supabase
-    const supabaseUrl = process.env.SUPABASE_URL!;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false },
-      realtime: {
-        transport: WebSocket
-      }
-    });
-
     const { data, error } = await supabase
       .from('conversations')
       .insert([
@@ -116,13 +139,23 @@ export default async (req: Request, context: any) => {
 
     if (error) {
       console.error('Supabase Error:', error);
+      if (logId) {
+        await supabase.from('webhook_logs').update({ status: 'Error', error_message: error.message }).eq('id', logId);
+      }
       return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    }
+
+    if (logId) {
+      await supabase.from('webhook_logs').update({ status: 'Success' }).eq('id', logId);
     }
 
     return new Response(JSON.stringify({ success: true, data }), { status: 200 });
 
   } catch (err: any) {
     console.error('Error processing request:', err);
+    
+    // We don't have scope of logId here easily unless we hoist it, 
+    // but the global error catch is usually for major crashes before the db insert.
     return new Response(JSON.stringify({ error: 'Internal Server Error', details: err.message }), { status: 500 });
   }
 };
