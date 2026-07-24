@@ -40,13 +40,17 @@ export default function Dashboard() {
     setLoading(false);
   };
 
-  const filtered = conversations.filter(c => 
-    c.customer_sentiment?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.conversation_summary?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.phone_number?.includes(searchTerm)
-  );
+  const filtered = conversations.filter(c => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      (c.customer_sentiment?.toLowerCase() || '').includes(term) ||
+      (c.conversation_summary?.toLowerCase() || '').includes(term) ||
+      (c.company_name?.toLowerCase() || '').includes(term) ||
+      (c.customer_name?.toLowerCase() || '').includes(term) ||
+      (c.phone_number || '').includes(searchTerm)
+    );
+  });
 
   return (
     <div className="h-full flex flex-col relative">
