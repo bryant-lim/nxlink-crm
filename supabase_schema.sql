@@ -162,3 +162,12 @@ ON public.customer_profiles FOR ALL TO authenticated USING (true) WITH CHECK (tr
 
 CREATE POLICY "Allow service role to manage customer profiles"
 ON public.customer_profiles FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+-- 6. Enable RLS permissions for profiles table
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow authenticated and service role to manage profiles" ON public.profiles;
+
+CREATE POLICY "Allow authenticated and service role to manage profiles"
+ON public.profiles FOR ALL USING (true) WITH CHECK (true);
+

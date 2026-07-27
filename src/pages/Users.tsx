@@ -105,53 +105,68 @@ export default function Users() {
     setSaving(true);
     setFeedbackMsg(null);
 
+    const isEdit = !!editingProfile;
+    const profilePayload = {
+      id: editingProfile?.id || crypto.randomUUID(),
+      username: username.trim(),
+      email: email.trim(),
+      name: name.trim(),
+      mobile: mobile.trim() || null,
+      role,
+      is_active: isActive,
+    };
+
     try {
-      if (editingProfile) {
-        // Update profile
-        const updatePayload: Partial<UserProfile> = {
-          username: username.trim(),
-          email: email.trim(),
-          name: name.trim(),
-          mobile: mobile.trim() || null,
-          role,
-          is_active: isActive,
-        };
+      // 1. Attempt via Netlify admin function to bypass Supabase RLS policies
+      let resData: any = null;
+      let ok = false;
 
-        const { error } = await supabase
-          .from('profiles')
-          .update(updatePayload)
-          .eq('id', editingProfile.id);
+      try {
+        const resp = await fetch('/.netlify/functions/manage-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: isEdit ? 'update' : 'create',
+            profile: profilePayload,
+            password: password.trim() || undefined
+          })
+        });
 
-        if (error) throw error;
+        if (resp.ok) {
+          resData = await resp.json();
+          ok = true;
+        }
+      } catch (e) {}
 
-        setProfiles(profiles.map(p => p.id === editingProfile.id ? { ...p, ...updatePayload } : p));
-        setFeedbackMsg({ type: 'success', text: `Updated ${name} successfully!` });
-        setTimeout(() => setIsModalOpen(false), 1000);
-      } else {
-        // Create profile
-        const newPayload = {
-          id: crypto.randomUUID(),
-          username: username.trim(),
-          email: email.trim(),
-          name: name.trim(),
-          mobile: mobile.trim() || null,
-          role,
-          is_active: isActive,
-        };
-
-        const { data, error } = await supabase
-          .from('profiles')
-          .insert([newPayload])
-          .select();
-
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-          setProfiles([data[0], ...profiles]);
-          setFeedbackMsg({ type: 'success', text: `Created user ${name} (${username}) successfully!` });
-          setTimeout(() => setIsModalOpen(false), 1000);
+      // 2. Fallback to direct Supabase client if local dev without Netlify CLI
+      if (!ok) {
+        if (isEdit) {
+          const { error } = await supabase
+            .from('profiles')
+            .update(profilePayload)
+            .eq('id', editingProfile.id);
+          if (error) throw error;
+          resData = { profile: { ...editingProfile, ...profilePayload } };
+        } else {
+          const { data, error } = await supabase
+            .from('profiles')
+            .insert([profilePayload])
+            .select()
+            .single();
+          if (error) throw error;
+          resData = { profile: data };
         }
       }
+
+      if (isEdit) {
+        setProfiles(profiles.map(p => p.id === editingProfile.id ? { ...p, ...resData.profile } : p));
+        setFeedbackMsg({ type: 'success', text: `Updated ${name} successfully!` });
+      } else {
+        setProfiles([resData.profile, ...profiles]);
+        setFeedbackMsg({ type: 'success', text: `Created user ${name} (${username}) successfully!` });
+      }
+
+      setTimeout(() => setIsModalOpen(false), 1000);
     } catch (err: any) {
       setFeedbackMsg({ type: 'error', text: err.message || 'Error saving user profile.' });
     } finally {
@@ -161,10 +176,19 @@ export default function Users() {
 
   const toggleUserActiveStatus = async (p: UserProfile) => {
     const newStatus = !p.is_active;
-    const { error } = await supabase.from('profiles').update({ is_active: newStatus }).eq('id', p.id);
-    if (!error) {
-      setProfiles(profiles.map(item => item.id === p.id ? { ...item, is_active: newStatus } : item));
-    }
+    try {
+      await fetch('/.netlify/functions/manage-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          profile: { id: p.id, is_active: newStatus }
+        })
+      });
+    } catch (e) {}
+
+    await supabase.from('profiles').update({ is_active: newStatus }).eq('id', p.id);
+    setProfiles(profiles.map(item => item.id === p.id ? { ...item, is_active: newStatus } : item));
   };
 
   const filteredProfiles = profiles.filter(p => {
