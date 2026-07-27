@@ -1,20 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-nx-green: #90c641;
-  --color-nx-green-hover: #82b43b;
-  --color-nx-dark: #12373c;
-  --color-nx-bg: #f9fbf7;
+  --color-nx-green: #059669;
+  --color-nx-green-hover: #047857;
+  --color-nx-dark: #0f172a;
+  --color-nx-bg: #fafafa;
   --color-nx-card: #ffffff;
+  --color-nx-border: #e2e8f0;
 }
 
 body {
   margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--color-nx-bg);
-  color: var(--color-nx-dark);
+  background-color: #fafafa;
+  color: #0f172a;
+}
+
+h1, h2, h3, h4, h5, h6, .font-heading, label, button, .font-title {
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

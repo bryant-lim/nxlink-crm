@@ -1,10 +1,34 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useNavigate, Link, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { LayoutDashboard, Code, LogOut, Loader2 } from 'lucide-react';
+import { 
+  LayoutDashboard, 
+  Ticket as TicketIcon, 
+  Users as UsersIcon, 
+  BarChart3, 
+  UserCog, 
+  Code, 
+  LogOut, 
+  Loader2, 
+  Menu, 
+  X,
+  ChevronRight,
+  ChevronDown,
+  PanelLeftClose,
+  PanelLeftOpen,
+  TrendingUp
+} from 'lucide-react';
 
 export default function Layout() {
   const [loading, setLoading] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [reportsSubMenuOpen, setReportsSubMenuOpen] = useState(true);
+
+  const [userRole, setUserRole] = useState<'admin' | 'support' | 'sales'>('admin');
+  const [displayName, setDisplayName] = useState<string>('Admin User');
+  const [userEmail, setUserEmail] = useState<string>('');
+
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -13,18 +37,51 @@ export default function Layout() {
       if (!session) {
         navigate('/login');
       } else {
-        setLoading(false);
+        setUserEmail(session.user.email || '');
+        fetchUserProfile(session.user.email || '');
       }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
         navigate('/login');
+      } else {
+        setUserEmail(session.user.email || '');
+        fetchUserProfile(session.user.email || '');
       }
     });
 
     return () => subscription.unsubscribe();
   }, [navigate]);
+
+  const fetchUserProfile = async (email: string) => {
+    if (!email) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (data) {
+        setUserRole(data.role as any);
+        setDisplayName(data.name || data.username || email.split('@')[0]);
+      } else {
+        setDisplayName(email.split('@')[0]);
+      }
+    } catch (e) {
+      console.warn('Profile fetch warning:', e);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -32,79 +89,317 @@ export default function Layout() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-nx-bg flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-nx-green animate-spin" />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
       </div>
     );
   }
 
-  const navItems = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { name: 'API Integration', path: '/api-docs', icon: Code },
-  ];
+  const isReportsActive = location.pathname.startsWith('/reports');
+  const currentSearch = new URLSearchParams(location.search);
+  const currentReportsTab = currentSearch.get('tab') || 'tickets';
 
   return (
-    <div className="min-h-screen bg-nx-bg flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-nx-card border-r border-gray-200 flex flex-col hidden md:flex">
-        <div className="h-16 flex items-center px-6 border-b border-gray-200">
-          <div className="w-8 h-8 bg-nx-green rounded-lg flex items-center justify-center mr-3">
-            <span className="text-white font-bold text-sm">NX</span>
-          </div>
-          <span className="text-lg font-bold text-nx-dark tracking-wide">NXLink CRM</span>
+    <div className="min-h-screen bg-[#fafafa] text-slate-900 flex flex-col md:flex-row font-sans">
+      {/* Desktop Sidebar */}
+      <aside 
+        className={`bg-white border-r border-slate-200 flex-col hidden md:flex h-screen sticky top-0 z-30 transition-all duration-200 ${
+          isCollapsed ? 'w-20' : 'w-64'
+        }`}
+      >
+        {/* Brand Header */}
+        <div className={`h-16 flex items-center justify-between px-4 border-b border-slate-100 ${isCollapsed ? 'justify-center' : ''}`}>
+          {!isCollapsed && (
+            <Link to="/" className="flex items-center space-x-3 group">
+              <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white font-bold font-heading shadow-xs group-hover:bg-emerald-700 transition-colors">
+                AS
+              </div>
+              <span className="text-base font-bold font-heading tracking-tight text-slate-900">ASimple CRM</span>
+            </Link>
+          )}
+
+          {isCollapsed && (
+            <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white font-bold font-heading shadow-xs">
+              AS
+            </div>
+          )}
+
+          {/* Minimize / Expand Toggle */}
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+            title={isCollapsed ? 'Expand Sidebar' : 'Minimize Sidebar'}
+          >
+            {isCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
         </div>
-        
-        <nav className="flex-1 px-4 py-6 space-y-2">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.path;
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`flex items-center px-4 py-3 rounded-xl transition-all ${
-                  isActive 
-                    ? 'bg-nx-green/10 text-nx-green font-medium' 
-                    : 'text-gray-500 hover:bg-gray-50 hover:text-nx-dark'
-                }`}
-              >
-                <Icon size={20} className="mr-3" />
-                {item.name}
-              </Link>
-            );
-          })}
+
+        {/* Nav Links */}
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          {/* Dashboard */}
+          <Link
+            to="/"
+            className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'} py-2.5 rounded-lg text-sm font-medium transition-all ${
+              location.pathname === '/' 
+                ? 'bg-slate-100 text-slate-900 font-semibold' 
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            }`}
+            title={isCollapsed ? 'Dashboard' : ''}
+          >
+            <div className="flex items-center space-x-3">
+              <LayoutDashboard size={18} className={location.pathname === '/' ? 'text-emerald-600' : 'text-slate-400'} />
+              {!isCollapsed && <span className="font-heading">Dashboard</span>}
+            </div>
+          </Link>
+
+          {/* Tickets */}
+          <Link
+            to="/tickets"
+            className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'} py-2.5 rounded-lg text-sm font-medium transition-all ${
+              location.pathname === '/tickets' 
+                ? 'bg-slate-100 text-slate-900 font-semibold' 
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            }`}
+            title={isCollapsed ? 'Tickets & SLAs' : ''}
+          >
+            <div className="flex items-center space-x-3">
+              <TicketIcon size={18} className={location.pathname === '/tickets' ? 'text-emerald-600' : 'text-slate-400'} />
+              {!isCollapsed && <span className="font-heading">Tickets & SLAs</span>}
+            </div>
+          </Link>
+
+          {/* Customers */}
+          <Link
+            to="/customers"
+            className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'} py-2.5 rounded-lg text-sm font-medium transition-all ${
+              location.pathname === '/customers' 
+                ? 'bg-slate-100 text-slate-900 font-semibold' 
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            }`}
+            title={isCollapsed ? 'Customer Directory' : ''}
+          >
+            <div className="flex items-center space-x-3">
+              <UsersIcon size={18} className={location.pathname === '/customers' ? 'text-emerald-600' : 'text-slate-400'} />
+              {!isCollapsed && <span className="font-heading">Customer Directory</span>}
+            </div>
+          </Link>
+
+          {/* Reports & Analytics with Sub-Menu */}
+          <div>
+            <button
+              onClick={() => {
+                if (isCollapsed) setIsCollapsed(false);
+                setReportsSubMenuOpen(!reportsSubMenuOpen);
+                if (!isReportsActive) navigate('/reports?tab=tickets');
+              }}
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'} py-2.5 rounded-lg text-sm font-medium transition-all ${
+                isReportsActive 
+                  ? 'bg-slate-100 text-slate-900 font-semibold' 
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+              title={isCollapsed ? 'Report & Analytics' : ''}
+            >
+              <div className="flex items-center space-x-3">
+                <BarChart3 size={18} className={isReportsActive ? 'text-emerald-600' : 'text-slate-400'} />
+                {!isCollapsed && <span className="font-heading">Report & Analytics</span>}
+              </div>
+              {!isCollapsed && (
+                reportsSubMenuOpen ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />
+              )}
+            </button>
+
+            {/* Sub-menu items */}
+            {reportsSubMenuOpen && !isCollapsed && (
+              <div className="ml-7 mt-1 pl-2 border-l border-slate-200 space-y-1">
+                <Link
+                  to="/reports?tab=tickets"
+                  className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs font-heading font-medium transition-all ${
+                    isReportsActive && currentReportsTab === 'tickets'
+                      ? 'text-emerald-600 font-bold bg-emerald-50/50'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <BarChart3 size={13} />
+                  <span>Case/Ticket Analytics</span>
+                </Link>
+
+                <Link
+                  to="/reports?tab=tags"
+                  className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs font-heading font-medium transition-all ${
+                    isReportsActive && currentReportsTab === 'tags'
+                      ? 'text-emerald-600 font-bold bg-emerald-50/50'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <TrendingUp size={13} />
+                  <span>Tag Analytics</span>
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* User Management (Admin Only) */}
+          {userRole === 'admin' && (
+            <Link
+              to="/users"
+              className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'} py-2.5 rounded-lg text-sm font-medium transition-all ${
+                location.pathname === '/users' 
+                  ? 'bg-slate-100 text-slate-900 font-semibold' 
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+              title={isCollapsed ? 'User Management' : ''}
+            >
+              <div className="flex items-center space-x-3">
+                <UserCog size={18} className={location.pathname === '/users' ? 'text-emerald-600' : 'text-slate-400'} />
+                {!isCollapsed && <span className="font-heading">User Management</span>}
+              </div>
+            </Link>
+          )}
+
+          {/* API Integration */}
+          <Link
+            to="/api-docs"
+            className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'} py-2.5 rounded-lg text-sm font-medium transition-all ${
+              location.pathname === '/api-docs' 
+                ? 'bg-slate-100 text-slate-900 font-semibold' 
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            }`}
+            title={isCollapsed ? 'API Integration' : ''}
+          >
+            <div className="flex items-center space-x-3">
+              <Code size={18} className={location.pathname === '/api-docs' ? 'text-emerald-600' : 'text-slate-400'} />
+              {!isCollapsed && <span className="font-heading">API Integration</span>}
+            </div>
+          </Link>
         </nav>
 
-        <div className="p-4 border-t border-gray-200">
+        {/* User Profile & Sign Out */}
+        <div className="p-3 border-t border-slate-100 space-y-2">
+          {!isCollapsed ? (
+            <div className="px-3.5 py-2 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-between">
+              <div className="truncate">
+                <p className="text-xs font-bold font-heading text-slate-900 truncate">{displayName}</p>
+                <p className="text-[10px] text-slate-400 truncate font-mono">{userEmail}</p>
+              </div>
+              <span className={`px-2 py-0.5 rounded text-[9px] font-bold font-heading uppercase ${
+                userRole === 'admin' ? 'bg-purple-100 text-purple-700' :
+                userRole === 'sales' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+              }`}>
+                {userRole}
+              </span>
+            </div>
+          ) : (
+            <div className="flex justify-center">
+              <span className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-xs text-slate-700 font-heading">
+                {displayName.charAt(0).toUpperCase()}
+              </span>
+            </div>
+          )}
+
           <button
             onClick={handleLogout}
-            className="flex items-center w-full px-4 py-3 text-gray-500 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors"
+            className={`flex items-center w-full ${isCollapsed ? 'justify-center px-2' : 'px-3.5'} py-2 text-xs font-semibold font-heading text-slate-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors group`}
+            title={isCollapsed ? 'Sign Out' : ''}
           >
-            <LogOut size={20} className="mr-3" />
-            Sign Out
+            <LogOut size={16} className={`${isCollapsed ? '' : 'mr-2'} text-slate-400 group-hover:text-red-500 transition-colors`} />
+            {!isCollapsed && <span>Sign Out</span>}
           </button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col min-h-screen max-w-full overflow-hidden">
-        {/* Mobile Header */}
-        <header className="h-16 bg-nx-card border-b border-gray-200 flex items-center justify-between px-4 md:hidden">
-           <div className="flex items-center">
-             <div className="w-6 h-6 bg-nx-green rounded flex items-center justify-center mr-2">
-               <span className="text-white font-bold text-xs">NX</span>
-             </div>
-             <span className="text-lg font-bold text-nx-dark tracking-wide">NXLink CRM</span>
-           </div>
-           <button onClick={handleLogout} className="text-gray-500 hover:text-nx-dark">
-             <LogOut size={20} />
-           </button>
-        </header>
+      {/* Mobile Top Header */}
+      <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sticky top-0 z-40 md:hidden">
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white font-bold font-heading text-sm">
+            AS
+          </div>
+          <div>
+            <span className="text-base font-bold font-heading tracking-tight text-slate-900 block leading-tight">ASimple CRM</span>
+            <span className="text-[10px] text-slate-400 font-mono">{displayName} ({userRole})</span>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2">
+          <button 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+            aria-label="Toggle Menu"
+          >
+            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
+      </header>
 
-        <div className="flex-1 overflow-auto p-4 md:p-8">
+      {/* Mobile Drawer Menu */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 top-16 bg-slate-900/40 backdrop-blur-xs z-40 md:hidden flex flex-col">
+          <div className="bg-white border-b border-slate-200 p-4 space-y-2 animate-in slide-in-from-top-2 duration-150">
+            <Link to="/" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50">
+              <LayoutDashboard size={20} className="text-slate-400" />
+              <span className="font-heading">Dashboard</span>
+            </Link>
+            <Link to="/tickets" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50">
+              <TicketIcon size={20} className="text-slate-400" />
+              <span className="font-heading">Tickets & SLAs</span>
+            </Link>
+            <Link to="/customers" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50">
+              <UsersIcon size={20} className="text-slate-400" />
+              <span className="font-heading">Customer Directory</span>
+            </Link>
+
+            <div className="space-y-1 pl-4 border-l-2 border-slate-200 py-1">
+              <span className="text-xs font-bold text-slate-400 font-heading uppercase">Report & Analytics</span>
+              <Link to="/reports?tab=tickets" className="flex items-center space-x-2 py-2 text-xs font-heading font-medium text-slate-700">
+                <BarChart3 size={14} className="text-emerald-600" />
+                <span>Case/Ticket Analytics</span>
+              </Link>
+              <Link to="/reports?tab=tags" className="flex items-center space-x-2 py-2 text-xs font-heading font-medium text-slate-700">
+                <TrendingUp size={14} className="text-emerald-600" />
+                <span>Tag Analytics</span>
+              </Link>
+            </div>
+
+            {userRole === 'admin' && (
+              <Link to="/users" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50">
+                <UserCog size={20} className="text-slate-400" />
+                <span className="font-heading">User Management</span>
+              </Link>
+            )}
+
+            <div className="pt-2 border-t border-slate-100">
+              <button
+                onClick={handleLogout}
+                className="flex items-center w-full px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors font-heading font-semibold"
+              >
+                <LogOut size={20} className="mr-3 text-red-500" />
+                Sign Out ({displayName})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Workspace View */}
+      <main className="flex-1 flex flex-col min-w-0 min-h-screen overflow-x-hidden">
+        <div className="flex-1 p-4 sm:p-6 md:p-8 max-w-7xl w-full mx-auto">
           <Outlet />
         </div>
       </main>
+
+      {/* Mobile Bottom Nav Bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 py-2 px-3 flex justify-around items-center z-30 shadow-lg">
+        <Link to="/" className="flex flex-col items-center py-1 px-3 rounded-lg text-slate-600">
+          <LayoutDashboard size={18} />
+          <span className="text-[10px] font-heading mt-1">Dashboard</span>
+        </Link>
+        <Link to="/tickets" className="flex flex-col items-center py-1 px-3 rounded-lg text-slate-600">
+          <TicketIcon size={18} />
+          <span className="text-[10px] font-heading mt-1">Tickets</span>
+        </Link>
+        <Link to="/reports?tab=tickets" className="flex flex-col items-center py-1 px-3 rounded-lg text-slate-600">
+          <BarChart3 size={18} />
+          <span className="text-[10px] font-heading mt-1">Reports</span>
+        </Link>
+      </div>
     </div>
   );
 }

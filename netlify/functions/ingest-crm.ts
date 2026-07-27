@@ -1,40 +1,37 @@
 import { createClient } from '@supabase/supabase-js';
 import WebSocket from 'ws';
 
-// The Netlify function handler
+// SLA calculation helper inside Netlify server function
+function getSLAOffset(priority: string) {
+  const responseDue = new Date();
+  const resolutionDue = new Date();
+
+  if (priority === 'urgent') {
+    responseDue.setHours(responseDue.getHours() + 1);
+    resolutionDue.setHours(resolutionDue.getHours() + 4);
+  } else if (priority === 'high') {
+    responseDue.setHours(responseDue.getHours() + 4);
+    resolutionDue.setHours(resolutionDue.getHours() + 24);
+  } else if (priority === 'medium') {
+    responseDue.setHours(responseDue.getHours() + 12);
+    resolutionDue.setHours(resolutionDue.getHours() + 48);
+  } else {
+    responseDue.setHours(responseDue.getHours() + 24);
+    resolutionDue.setHours(resolutionDue.getHours() + 72);
+  }
+
+  return {
+    first_response_due_at: responseDue.toISOString(),
+    resolution_due_at: resolutionDue.toISOString()
+  };
+}
+
 export default async (req: Request, context: any) => {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 });
   }
 
-  // 1. Authenticate using x-api-secret-key (TEMPORARILY DISABLED FOR TESTING)
-  /*
-  const apiKey = req.headers.get('x-api-secret-key');
-  const expectedKey = process.env.API_SECRET_KEY;
-
-  if (!expectedKey) {
-    return new Response(JSON.stringify({ error: 'Server misconfiguration: API_SECRET_KEY not set' }), { status: 500 });
-  }
-
-  if (apiKey !== expectedKey) {
-    // temporarily return the lengths of both keys to debug why they don't match
-    const debugInfo = {
-      error: 'Unauthorized',
-      providedKeyLength: apiKey ? apiKey.length : 0,
-      expectedKeyLength: expectedKey ? expectedKey.length : 0,
-      providedKeyEndsWith2026: apiKey?.endsWith('_2026'),
-      expectedKeyEndsWith2026: expectedKey?.endsWith('_2026')
-    };
-    console.log("Auth Mismatch Details:", debugInfo);
-    return new Response(JSON.stringify(debugInfo), { 
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-  */
-
   try {
-    // 2. Read the body as plain text first so we don't crash if they send malformed JSON
     const contentType = req.headers.get('content-type') || '';
     const rawBody = await req.text();
 
@@ -46,7 +43,6 @@ export default async (req: Request, context: any) => {
       realtime: { transport: WebSocket }
     });
 
-    // 2.5 Try to log the raw incoming request
     let logId: string | null = null;
     try {
       const { data, error } = await supabase
@@ -56,19 +52,15 @@ export default async (req: Request, context: any) => {
         .single();
       if (data && !error) logId = data.id;
     } catch (e) {
-      console.warn('Skipping webhook_log insert (table might not exist yet):', e);
+      console.warn('Skipping webhook_log insert:', e);
     }
 
     let rawText = '';
-
     if (contentType.includes('application/json')) {
       try {
         const body = JSON.parse(rawBody);
         rawText = body.payload || body.text || rawBody;
       } catch (e) {
-        // 3rd party tool injected unescaped quotes causing invalid JSON.
-        // Fallback: just use the raw, unparsed string! 
-        // Our extractField will still find "Customer Sentiment:" inside it anyway.
         rawText = rawBody;
       }
     } else {
@@ -79,7 +71,6 @@ export default async (req: Request, context: any) => {
       return new Response(JSON.stringify({ error: 'No payload provided' }), { status: 400 });
     }
 
-    // 3. Extract information from the text
     const extractedData = {
       customer_sentiment: extractField(rawText, 'Customer Sentiment:'),
       conversation_summary: extractField(rawText, 'Conversation Summary:'),
@@ -91,7 +82,6 @@ export default async (req: Request, context: any) => {
       phone_number: extractField(rawText, 'Phone Number:'),
     };
 
-    // If fields are 'null', set to null
     if (extractedData.company_name?.toLowerCase() === 'null') extractedData.company_name = null;
     if (extractedData.email_address?.toLowerCase() === 'null') extractedData.email_address = null;
     if (extractedData.customer_name?.toLowerCase() === 'null') extractedData.customer_name = null;
@@ -100,38 +90,25 @@ export default async (req: Request, context: any) => {
     let conversation_tags: string[] | null = null;
     if (extractedData.tags_string && extractedData.tags_string.toLowerCase() !== 'null') {
       let tagStr = extractedData.tags_string.trim();
-      
-      // Clean up trailing junk like '"} }' that the 3rd party tool might inject
       tagStr = tagStr.replace(/["'}\s]+$/, '');
       
-      // Attempt 1: Parse as JSON array if it contains '[' and ']'
       if (tagStr.includes('[') && tagStr.includes(']')) {
         try {
           const arrayStr = tagStr.substring(tagStr.indexOf('['), tagStr.lastIndexOf(']') + 1);
-          // Sometimes stringified JSON has escaped quotes inside a string.
-          // Let's just try to parse it directly.
           let parsed;
           try { 
             parsed = JSON.parse(arrayStr); 
           } catch { 
-            // Fallback for badly escaped strings
             parsed = JSON.parse(arrayStr.replace(/\\"/g, '"')); 
           }
-          
           if (Array.isArray(parsed)) {
             const names = parsed.map((item: any) => item.name || item.value || item).filter(Boolean);
-            if (names.length > 0) {
-              conversation_tags = names.map(n => String(n).trim());
-            }
+            if (names.length > 0) conversation_tags = names.map(n => String(n).trim());
           }
-        } catch (e) {
-          // Ignore parse errors, fallback to regex
-        }
+        } catch (e) {}
       }
 
-      // Attempt 2: Permissive Regex
       if (!conversation_tags) {
-        // match name:"value", "name": "value", \"name\": \"value\"
         const nameRegex = /(?:\\?"|')name(?:\\?"|')\s*:\s*(?:\\?"|')([^"']+)(?:\\?"|')/g;
         const matches = [...tagStr.matchAll(nameRegex)];
         if (matches.length > 0) {
@@ -139,16 +116,20 @@ export default async (req: Request, context: any) => {
         }
       }
       
-      // Fallback 3: Comma separated (only if it doesn't look like a JSON array at all)
       if (!conversation_tags) {
-        // Remove brackets if they somehow exist
         tagStr = tagStr.replace(/[\[\]{}"\\]/g, '');
         conversation_tags = tagStr.split(',').map(t => t.trim()).filter(Boolean);
       }
     }
 
-    // 4. Insert into Supabase
-    const { data, error } = await supabase
+    let callAudioUrl: string | null = extractField(rawText, 'Call Audio URL:');
+    if (!callAudioUrl) {
+      const mp3Match = rawText.match(/https?:\/\/[^\s"']+\.mp3/i);
+      if (mp3Match) callAudioUrl = mp3Match[0];
+    }
+
+    // Insert into Conversations
+    const { data: convData, error: convError } = await supabase
       .from('conversations')
       .insert([
         {
@@ -160,39 +141,102 @@ export default async (req: Request, context: any) => {
           company_name: extractedData.company_name,
           email_address: extractedData.email_address,
           conversation_tags: conversation_tags,
-          // Since it's a new ingest, we can set the date/time to now if not provided in the text.
           conversation_date: new Date().toISOString().split('T')[0],
           conversation_time: new Date().toISOString().split('T')[1].split('.')[0],
-          conversation_transcript: rawText, // Storing the full raw text as transcript just in case
+          conversation_transcript: rawText,
+          call_audio_url: callAudioUrl,
         }
       ])
-      .select();
+      .select('id')
+      .single();
 
-    if (error) {
-      console.error('Supabase Error:', error);
+    if (convError) {
+      console.error('Supabase Error:', convError);
       if (logId) {
-        await supabase.from('webhook_logs').update({ status: 'Error', error_message: error.message }).eq('id', logId);
+        await supabase.from('webhook_logs').update({ status: 'Error', error_message: convError.message }).eq('id', logId);
       }
-      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+      return new Response(JSON.stringify({ error: convError.message }), { status: 500 });
+    }
+
+    const insertedConvo = convData?.[0];
+
+    // Evaluate Auto-Ticket Rules
+    const tagsCombined = (conversation_tags || []).join(' ').toLowerCase();
+    const sentimentCombined = (extractedData.customer_sentiment || '').toLowerCase();
+    const summaryCombined = (extractedData.conversation_summary || '').toLowerCase();
+
+    let autoPriority: 'urgent' | 'high' | 'medium' | null = null;
+    let autoTitle = '';
+    let autoRole = 'support_manager';
+
+    if (tagsCombined.includes('dh - emergency') || tagsCombined.includes('emergency') || sentimentCombined.includes('emergency')) {
+      autoPriority = 'urgent';
+      autoTitle = '🚨 Emergency Ticket: Urgent Support / Sales Attention Required';
+      autoRole = 'support_manager';
+    } else if (tagsCombined.includes('hot lead') || tagsCombined.includes('sales lead') || tagsCombined.includes('demo requested')) {
+      autoPriority = 'high';
+      autoTitle = '🔥 Hot Lead Follow-Up Ticket';
+      autoRole = 'sales_person';
+    } else if (tagsCombined.includes('bug report') || tagsCombined.includes('refund') || sentimentCombined.includes('negative')) {
+      autoPriority = 'medium';
+      autoTitle = '⚠️ Support Case: Customer Issue Follow-up';
+      autoRole = 'support_manager';
+    }
+
+    let createdTicket = null;
+    if (autoPriority && insertedConvo) {
+      const sla = getSLAOffset(autoPriority);
+      const { data: ticketRes } = await supabase.from('tickets').insert([
+        {
+          conversation_id: insertedConvo.id,
+          customer_phone: extractedData.phone_number,
+          customer_name: extractedData.customer_name,
+          company_name: extractedData.company_name,
+          title: autoTitle,
+          description: extractedData.conversation_summary || 'Auto-created ticket from chat ingestion.',
+          priority: autoPriority,
+          status: 'open',
+          assigned_to_role: autoRole,
+          first_response_due_at: sla.first_response_due_at,
+          resolution_due_at: sla.resolution_due_at,
+        }
+      ]).select();
+      if (ticketRes) createdTicket = ticketRes[0];
+    }
+
+    // Upsert Customer Profile
+    if (extractedData.phone_number) {
+      const cleanPhone = extractedData.phone_number.replace(/[^\d+]/g, '');
+      if (cleanPhone) {
+        const { data: existingProfile } = await supabase.from('customer_profiles').select('*').eq('phone_number', cleanPhone).single();
+
+        const currentConvoCount = (existingProfile?.total_conversations || 0) + 1;
+        await supabase.from('customer_profiles').upsert([
+          {
+            phone_number: cleanPhone,
+            customer_name: extractedData.customer_name || existingProfile?.customer_name,
+            company_name: extractedData.company_name || existingProfile?.company_name,
+            email_address: extractedData.email_address || existingProfile?.email_address,
+            total_conversations: currentConvoCount,
+            last_interaction_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+        ]);
+      }
     }
 
     if (logId) {
       await supabase.from('webhook_logs').update({ status: 'Success' }).eq('id', logId);
     }
 
-    return new Response(JSON.stringify({ success: true, data }), { status: 200 });
+    return new Response(JSON.stringify({ success: true, conversation: insertedConvo, ticket: createdTicket }), { status: 200 });
 
   } catch (err: any) {
     console.error('Error processing request:', err);
-    
-    // We don't have scope of logId here easily unless we hoist it, 
-    // but the global error catch is usually for major crashes before the db insert.
     return new Response(JSON.stringify({ error: 'Internal Server Error', details: err.message }), { status: 500 });
   }
 };
 
-// Helper function to extract a field based on the label.
-// It looks for the label and takes everything until the next known label or end of string.
 function extractField(text: string, label: string): string | null {
   const labels = [
     'Customer Sentiment:',
@@ -210,7 +254,6 @@ function extractField(text: string, label: string): string | null {
 
   const startContentIndex = startIndex + label.length;
   
-  // Find the next label that appears after our current label
   let nextLabelIndex = text.length;
   for (const nextLabel of labels) {
     if (nextLabel === label) continue;
@@ -220,5 +263,8 @@ function extractField(text: string, label: string): string | null {
     }
   }
 
-  return text.substring(startContentIndex, nextLabelIndex).trim();
+  let result = text.substring(startContentIndex, nextLabelIndex).trim();
+  result = result.split(/\[nxlink_id:/i)[0].trim();
+  result = result.replace(/["}'\\\}\],]+$/g, '').trim();
+  return result;
 }

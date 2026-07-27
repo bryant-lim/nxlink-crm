@@ -8,7 +8,10 @@ export default async (req: Request, context: any) => {
 
   const tokenUrl = process.env.NXAI_TOKEN_URL;
   if (!tokenUrl) {
-    return new Response(JSON.stringify({ error: 'Server misconfiguration: NXAI_TOKEN_URL not set' }), { status: 500 });
+    return new Response(JSON.stringify({ 
+      error: 'Server misconfiguration', 
+      details: 'NXAI_TOKEN_URL environment variable is not set. Please configure it in your .env or Netlify settings.' 
+    }), { status: 500 });
   }
 
   const supabaseUrl = process.env.SUPABASE_URL!;
@@ -20,11 +23,19 @@ export default async (req: Request, context: any) => {
 
   try {
     // 1. Get plat_token
+    console.log('[Sync] Fetching plat_token from NXAI_TOKEN_URL...');
     const tokenResp = await fetch(tokenUrl);
-    if (!tokenResp.ok) throw new Error('Failed to fetch NXAI token');
+    if (!tokenResp.ok) {
+      throw new Error(`Failed to fetch NXAI token (HTTP ${tokenResp.status} ${tokenResp.statusText})`);
+    }
+
     const { token } = await tokenResp.json();
+    if (!token) {
+      throw new Error('NXAI_TOKEN_URL endpoint returned a response without a valid "token" field');
+    }
 
     // 2. Fetch AI Conversations
+    console.log('[Sync] Querying NXLINK AI Conversations API...');
     const convResp = await fetch('https://app.nxlink.ai/admin/nx_flow_manager/conversation', {
       method: 'POST',
       headers: {
@@ -34,9 +45,19 @@ export default async (req: Request, context: any) => {
       body: JSON.stringify({ "phone": null, "tags": [], "page_number": 1, "page_size": 100, "timeZone": "UTC+07:00" })
     });
     
-    if (!convResp.ok) throw new Error('Failed to fetch conversations');
+    if (!convResp.ok) {
+      throw new Error(`Failed to fetch conversations from app.nxlink.ai (HTTP ${convResp.status} ${convResp.statusText})`);
+    }
+
     const convData = await convResp.json();
+
+    // Check NXLINK API Error Codes
+    if (convData.code === '403' || convData.code === 403 || convData.message?.includes('未登录')) {
+      throw new Error(`Authentication Failure (NXLINK Code ${convData.code}): ${convData.message || 'plat_token expired or invalid'}`);
+    }
+
     const conversations = convData.list || convData.data || [];
+    console.log(`[Sync] Retrieved ${conversations.length} conversations from NXLINK API`);
 
     let syncedCount = 0;
 
@@ -45,8 +66,7 @@ export default async (req: Request, context: any) => {
       const convId = conv.id || conv.conversationId || conv.uuid;
       if (!convId) continue;
 
-      // Check if we already synced this today (rudimentary deduplication to avoid spamming the DB)
-      // We will skip if we find a conversation with this exact ID stored in the transcript (hacky but works for now)
+      // Check if we already synced this conversation
       const { data: existing } = await supabase
         .from('conversations')
         .select('id')
@@ -64,10 +84,10 @@ export default async (req: Request, context: any) => {
       const msgData = await msgResp.json();
       const messages = msgData.data || msgData.list || [];
 
-      // Flatten all text from the unknown JSON structure
+      // Flatten all text from transcript
       const rawText = extractAllText(messages) + `\n[nxlink_id:${convId}]`;
 
-      // Extract our fields exactly as the ingest-crm webhook does
+      // Extract CRM fields
       const extractedData = {
         customer_sentiment: extractField(rawText, 'Customer Sentiment:'),
         conversation_summary: extractField(rawText, 'Conversation Summary:'),
@@ -85,6 +105,22 @@ export default async (req: Request, context: any) => {
         conversation_tags = extractedData.tags_string.split(',').map(t => t.trim()).filter(Boolean);
       }
 
+      // Extract call_audio_url from conversation object or transcript messages
+      let callAudioUrl: string | null = conv.call_audio_url || conv.callAudioUrl || null;
+      if (!callAudioUrl && Array.isArray(messages)) {
+        for (const m of messages) {
+          if (m.msgInfo && typeof m.msgInfo === 'string' && m.msgInfo.includes('audio_url')) {
+            try {
+              const parsed = JSON.parse(m.msgInfo);
+              if (parsed.audio_url) {
+                callAudioUrl = parsed.audio_url;
+                break;
+              }
+            } catch (e) {}
+          }
+        }
+      }
+
       const { error } = await supabase
         .from('conversations')
         .insert([{
@@ -97,16 +133,17 @@ export default async (req: Request, context: any) => {
           conversation_date: new Date().toISOString().split('T')[0],
           conversation_time: new Date().toISOString().split('T')[1].split('.')[0],
           conversation_transcript: rawText,
+          call_audio_url: callAudioUrl,
         }]);
 
       if (!error) syncedCount++;
     }
 
-    return new Response(JSON.stringify({ success: true, syncedCount }), { status: 200 });
+    return new Response(JSON.stringify({ success: true, syncedCount, totalFound: conversations.length }), { status: 200 });
 
   } catch (err: any) {
     console.error('Sync Error:', err);
-    return new Response(JSON.stringify({ error: 'Internal Server Error', details: err.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: 'NXLINK Sync Failed', details: err.message }), { status: 500 });
   }
 };
 
@@ -146,7 +183,7 @@ function extractField(text: string, label: string): string | null {
   }
 
   let result = text.substring(startContentIndex, nextLabelIndex).trim();
-  // clean up any trailing JSON brackets if they leaked in
-  result = result.replace(/["}\],]+$/g, '').trim();
+  result = result.split(/\[nxlink_id:/i)[0].trim();
+  result = result.replace(/["}'\\\}\],]+$/g, '').trim();
   return result;
 }

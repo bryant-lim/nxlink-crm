@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:auth": "node scripts/test-auth.js",
+    "sync:local": "node scripts/sync-local.js",
+    "sync:dentalhome": "node scripts/sync-local.js",
+    "sync:webhook": "node scripts/sync-webhook.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.109.0",
