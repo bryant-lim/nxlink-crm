@@ -42,7 +42,7 @@ export default async (req: Request, context: any) => {
         'authorization': token,
         'content-type': 'application/json'
       },
-      body: JSON.stringify({ "phone": null, "tags": [], "page_number": 1, "page_size": 100, "timeZone": "UTC+07:00" })
+      body: JSON.stringify({ "phone": null, "tags": [], "page_number": 1, "page_size": 100, "timeZone": "UTC+08:00" })
     });
     
     if (!convResp.ok) {

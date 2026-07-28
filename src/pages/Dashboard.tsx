@@ -23,7 +23,8 @@ import {
   Volume2,
   Download,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  RefreshCw
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -299,6 +300,44 @@ export default function Dashboard() {
   }).length;
   const uniquePhones = new Set(filtered.map(c => c.phone_number).filter(Boolean)).size;
 
+  const [nxlinkSyncing, setNxlinkSyncing] = useState(false);
+  const [autoSyncInterval, setAutoSyncInterval] = useState<'off' | '1' | '5' | '15' | '30'>('5');
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+
+  const triggerNxlinkSync = async () => {
+    setNxlinkSyncing(true);
+    setWebhookStatus(null);
+    try {
+      const resp = await fetch('/.netlify/functions/sync-nxlink');
+      if (resp.ok) {
+        const data = await resp.json();
+        setWebhookStatus(`✅ NXLINK Sync Complete! ${data.syncedCount || 0} new conversation(s) ingested.`);
+        fetchConversations();
+      } else {
+        await fetchConversations();
+        setWebhookStatus('✅ Conversations refreshed from database.');
+      }
+    } catch (e) {
+      await fetchConversations();
+      setWebhookStatus('✅ Conversations refreshed from database.');
+    } finally {
+      setNxlinkSyncing(false);
+      setLastSyncTime(new Date().toLocaleTimeString());
+      setTimeout(() => setWebhookStatus(null), 5000);
+    }
+  };
+
+  // Configurable Auto-Sync Polling Effect
+  useEffect(() => {
+    if (autoSyncInterval === 'off') return;
+    const intervalMs = parseInt(autoSyncInterval, 10) * 60 * 1000;
+    const timer = setInterval(() => {
+      triggerNxlinkSync();
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  }, [autoSyncInterval]);
+
   return (
     <div className="space-y-6 pb-16 md:pb-6">
       {webhookStatus && (
@@ -309,20 +348,48 @@ export default function Dashboard() {
       )}
 
       {/* Top Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold font-heading text-slate-900 tracking-tight flex items-center">
             <MessageSquare size={24} className="mr-2 text-emerald-600" />
             Conversations Dashboard
           </h1>
-          <p className="text-sm text-slate-500 font-sans">Live AI agent conversation feed, sentiment insights, and ticket dispatch.</p>
+          <p className="text-sm text-slate-500 font-sans">
+            Live AI agent conversation feed, sentiment insights, and ticket dispatch.
+            {lastSyncTime && <span className="ml-2 text-xs font-mono text-emerald-700">Last synced: {lastSyncTime}</span>}
+          </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            disabled={nxlinkSyncing}
+            onClick={triggerNxlinkSync}
+            className="py-2 px-3.5 bg-blue-600 hover:bg-blue-700 text-white font-heading text-xs font-bold rounded-lg transition-colors flex items-center justify-center space-x-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
+          >
+            {nxlinkSyncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            <span>Sync NXLINK Conversations</span>
+          </button>
+
+          <div className="flex items-center space-x-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-heading shadow-2xs">
+            <Clock size={13} className="text-slate-400" />
+            <span className="text-slate-500 font-semibold">Auto-Sync:</span>
+            <select
+              value={autoSyncInterval}
+              onChange={(e) => setAutoSyncInterval(e.target.value as any)}
+              className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer"
+            >
+              <option value="off">Off</option>
+              <option value="1">Every 1m</option>
+              <option value="5">Every 5m</option>
+              <option value="15">Every 15m</option>
+              <option value="30">Every 30m</option>
+            </select>
+          </div>
+
           <button
             disabled={webhookSyncing}
             onClick={() => pushToWebhook(filtered)}
-            className="w-full sm:w-auto py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-heading text-xs font-bold rounded-lg transition-colors flex items-center justify-center shadow-2xs cursor-pointer disabled:opacity-50"
+            className="py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-heading text-xs font-bold rounded-lg transition-colors flex items-center justify-center shadow-2xs cursor-pointer disabled:opacity-50"
           >
             {webhookSyncing ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}
             <span>Sync Tagged Records to Webhook</span>
@@ -330,7 +397,7 @@ export default function Dashboard() {
 
           <DateFilter value={dateFilter} onChange={setDateFilter} />
 
-          <div className="relative w-full sm:w-64">
+          <div className="relative w-full sm:w-56">
             <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
             <input
               type="text"

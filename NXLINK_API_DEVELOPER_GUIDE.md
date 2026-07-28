@@ -131,7 +131,7 @@ Nested objects in a record flatten to `parent_child` keys; list fields serialize
 
 JSON body:
 ```json
-{ "phone": null, "tags": [], "page_number": 1, "page_size": 100, "timeZone": "UTC+07:00" }
+{ "phone": null, "tags": [], "page_number": 1, "page_size": 100, "timeZone": "UTC+08:00" }
 ```
 Returns bot sessions (including bot-only). Page via `page_number` / `page_size` against `total`.
 

@@ -188,7 +188,7 @@ async function main() {
         tags: [],
         page_number: pageNum,
         page_size: 100,
-        timeZone: 'UTC+07:00'
+        timeZone: 'UTC+08:00'
       })
     });
 
