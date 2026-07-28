@@ -69,6 +69,26 @@ function buildCleanDialogueThread(messages, convId) {
   return fullThread;
 }
 
+function shouldSyncToWebhook(tags) {
+  if (!Array.isArray(tags) || tags.length === 0) return false;
+
+  const lowerTags = tags.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : ''));
+
+  // Exclude routing-only tags (e.g. ["to agent"], ["branch agent"], ["to agent", "branch agent"])
+  const routingOnlyTags = ['to agent', 'branch agent', 'contact agent'];
+  const isOnlyRouting = lowerTags.every(t => routingOnlyTags.includes(t));
+  if (isOnlyRouting) return false;
+
+  // Exclude non-lead operational flows (Emergency, Check Booking)
+  const hasEmergencyOrCheckBooking = lowerTags.some(t =>
+    t.includes('emergency') || t.includes('check booking')
+  );
+  if (hasEmergencyOrCheckBooking) return false;
+
+  // Sync if contains Hot Lead or Booking Appointment
+  return lowerTags.some(t => t.includes('hot lead') || t.includes('booking appointment'));
+}
+
 function extractSummaryMetadata(messages, conv) {
   let sentiment = null;
   let summary = null;

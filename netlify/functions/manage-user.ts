@@ -1,5 +1,6 @@
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 
 export const handler: Handler = async (event) => {
   const corsHeaders = {
@@ -42,7 +43,8 @@ export const handler: Handler = async (event) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey, {
-      auth: { persistSession: false }
+      auth: { persistSession: false },
+      realtime: { transport: WebSocket }
     });
 
     const { action, profile, password } = body;

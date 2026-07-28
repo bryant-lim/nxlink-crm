@@ -24,7 +24,8 @@ import {
   Download,
   ChevronLeft,
   ChevronRight,
-  RefreshCw
+  RefreshCw,
+  Trash2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -304,6 +305,44 @@ export default function Dashboard() {
   const [autoSyncInterval, setAutoSyncInterval] = useState<'off' | '1' | '5' | '15' | '30'>('5');
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
 
+  // Deletion Feature State
+  const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [targetToDelete, setTargetToDelete] = useState<{ id: string; name?: string } | null>(null);
+
+  const confirmAndDelete = async () => {
+    setDeleting(true);
+    try {
+      const idsToDelete = targetToDelete ? [targetToDelete.id] : selectedRowIds;
+      if (idsToDelete.length === 0) return;
+
+      const { error } = await supabase
+        .from('conversations')
+        .delete()
+        .in('id', idsToDelete);
+
+      if (error) throw error;
+
+      setConversations(conversations.filter(c => !idsToDelete.includes(c.id)));
+      setSelectedRowIds(selectedRowIds.filter(id => !idsToDelete.includes(id)));
+
+      if (selectedConvo && idsToDelete.includes(selectedConvo.id)) {
+        setSelectedConvo(null);
+      }
+
+      setWebhookStatus(`✅ Successfully deleted ${idsToDelete.length} conversation record(s).`);
+      setTimeout(() => setWebhookStatus(null), 5000);
+    } catch (err: any) {
+      console.error('Delete error:', err);
+      setWebhookStatus(`❌ Failed to delete conversation: ${err.message}`);
+    } finally {
+      setDeleting(false);
+      setDeleteModalOpen(false);
+      setTargetToDelete(null);
+    }
+  };
+
   const triggerNxlinkSync = async () => {
     setNxlinkSyncing(true);
     setWebhookStatus(null);
@@ -311,15 +350,18 @@ export default function Dashboard() {
       const resp = await fetch('/.netlify/functions/sync-nxlink');
       if (resp.ok) {
         const data = await resp.json();
-        setWebhookStatus(`✅ NXLINK Sync Complete! ${data.syncedCount || 0} new conversation(s) ingested.`);
+        const msg = data.syncedCount > 0
+          ? `✅ NXLINK Sync Complete! ${data.syncedCount} new conversation(s) ingested (${data.webhookCount || 0} pushed to Webhook).`
+          : `✅ NXLINK Sync Complete! Up to date (${data.totalFound || 0} checked).`;
+        setWebhookStatus(msg);
         fetchConversations();
       } else {
         await fetchConversations();
-        setWebhookStatus('✅ Conversations refreshed from database.');
+        setWebhookStatus('✅ Refreshed view from database.');
       }
-    } catch (e) {
+    } catch (e: any) {
       await fetchConversations();
-      setWebhookStatus('✅ Conversations refreshed from database.');
+      setWebhookStatus(`❌ Sync Notice: ${e.message || 'Could not reach sync endpoint'}`);
     } finally {
       setNxlinkSyncing(false);
       setLastSyncTime(new Date().toLocaleTimeString());
@@ -385,6 +427,19 @@ export default function Dashboard() {
               <option value="30">Every 30m</option>
             </select>
           </div>
+
+          {selectedRowIds.length > 0 && (
+            <button
+              onClick={() => {
+                setTargetToDelete(null);
+                setDeleteModalOpen(true);
+              }}
+              className="py-2 px-3.5 bg-red-600 hover:bg-red-700 text-white font-heading text-xs font-bold rounded-lg transition-colors flex items-center justify-center space-x-1.5 shadow-2xs cursor-pointer animate-in fade-in duration-150"
+            >
+              <Trash2 size={14} />
+              <span>Delete Selected ({selectedRowIds.length})</span>
+            </button>
+          )}
 
           <button
             disabled={webhookSyncing}
@@ -461,12 +516,29 @@ export default function Dashboard() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider font-heading">
+                    <th className="py-3 px-4 w-10">
+                      <input
+                        type="checkbox"
+                        checked={paginatedConvos.length > 0 && paginatedConvos.every(c => selectedRowIds.includes(c.id))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            const pageIds = paginatedConvos.map(c => c.id);
+                            setSelectedRowIds(Array.from(new Set([...selectedRowIds, ...pageIds])));
+                          } else {
+                            const pageIds = paginatedConvos.map(c => c.id);
+                            setSelectedRowIds(selectedRowIds.filter(id => !pageIds.includes(id)));
+                          }
+                        }}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                      />
+                    </th>
                     <th className="py-3 px-4">ID</th>
                     <th className="py-3 px-4">Date</th>
                     <th className="py-3 px-4">Customer</th>
                     <th className="py-3 px-4">Phone</th>
                     <th className="py-3 px-4">Tags</th>
                     <th className="py-3 px-4">Summary</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
@@ -474,8 +546,24 @@ export default function Dashboard() {
                     <tr 
                       key={convo.id} 
                       onClick={() => setSelectedConvo(convo)}
-                      className="hover:bg-slate-50 cursor-pointer transition-colors group"
+                      className={`hover:bg-slate-50 cursor-pointer transition-colors group ${
+                        selectedRowIds.includes(convo.id) ? 'bg-emerald-50/40' : ''
+                      }`}
                     >
+                      <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedRowIds.includes(convo.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedRowIds([...selectedRowIds, convo.id]);
+                            } else {
+                              setSelectedRowIds(selectedRowIds.filter(id => id !== convo.id));
+                            }
+                          }}
+                          className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                        />
+                      </td>
                       <td className="py-3.5 px-4 font-mono text-xs font-bold text-slate-700 whitespace-nowrap">
                         #{getConvoId(convo)}
                       </td>
@@ -501,6 +589,18 @@ export default function Dashboard() {
                       </td>
                       <td className="py-3.5 px-4 text-xs text-slate-500 max-w-xs truncate">
                         {convo.conversation_summary || '-'}
+                      </td>
+                      <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => {
+                            setTargetToDelete({ id: convo.id, name: convo.customer_name });
+                            setDeleteModalOpen(true);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          title="Delete Record"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -604,6 +704,17 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => {
+                    setTargetToDelete({ id: selectedConvo.id, name: selectedConvo.customer_name });
+                    setDeleteModalOpen(true);
+                  }}
+                  className="py-1.5 px-3 bg-red-50 hover:bg-red-100 text-red-700 font-heading text-xs font-bold rounded-lg border border-red-200 transition-colors flex items-center shadow-2xs cursor-pointer"
+                  title="Delete Record"
+                >
+                  <Trash2 size={13} className="mr-1 text-red-600" />
+                  <span>Delete</span>
+                </button>
                 <button
                   disabled={webhookSyncing}
                   onClick={() => pushToWebhook([selectedConvo])}
@@ -849,6 +960,42 @@ export default function Dashboard() {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Record Deletion */}
+      {deleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200">
+            <div className="flex items-center space-x-3 text-red-600">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <Trash2 size={20} />
+              </div>
+              <h3 className="text-lg font-bold font-heading text-slate-900">Confirm Record Deletion</h3>
+            </div>
+            <p className="text-sm text-slate-600 font-sans leading-relaxed">
+              {targetToDelete
+                ? `Are you sure you want to delete conversation #${getConvoId(targetToDelete as any)} (${targetToDelete.name || 'Unknown Contact'})? This action cannot be undone.`
+                : `Are you sure you want to delete ${selectedRowIds.length} selected conversation record(s)? This action cannot be undone.`}
+            </p>
+            <div className="flex justify-end space-x-3 pt-2">
+              <button
+                disabled={deleting}
+                onClick={() => { setDeleteModalOpen(false); setTargetToDelete(null); }}
+                className="px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold font-heading transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={deleting}
+                onClick={confirmAndDelete}
+                className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg text-xs font-bold font-heading transition-colors flex items-center shadow-xs cursor-pointer disabled:opacity-50"
+              >
+                {deleting ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Trash2 size={14} className="mr-1.5" />}
+                <span>Delete Permanently</span>
+              </button>
             </div>
           </div>
         </div>

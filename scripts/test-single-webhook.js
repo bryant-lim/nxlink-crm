@@ -25,6 +25,7 @@ function loadEnv() {
 
 async function main() {
   loadEnv();
+  const searchId = process.argv[2] || '2877223';
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
@@ -33,7 +34,7 @@ async function main() {
     realtime: { transport: WebSocket }
   });
 
-  console.log('🔍 Searching Supabase for ID 292f67bb...');
+  console.log(`🔍 Searching Supabase for ID ${searchId}...`);
   const { data: convos, error } = await supabase.from('conversations').select('*');
 
   if (error || !convos) {
@@ -42,16 +43,15 @@ async function main() {
   }
 
   const match = convos.find(c => {
-    if (c.id && c.id.toLowerCase().startsWith('292f67bb')) return true;
-    if (c.conversation_transcript && c.conversation_transcript.includes('292f67bb')) return true;
+    if (c.id && c.id.toLowerCase().includes(searchId.toLowerCase())) return true;
+    if (c.conversation_transcript && c.conversation_transcript.includes(searchId)) return true;
     return false;
   });
 
   if (match) {
     console.log('📌 MATCH FOUND:');
-    console.log(JSON.stringify(match, null, 2));
+    console.log(`  Customer: ${match.customer_name}, Phone: ${match.phone_number}, Tags: ${JSON.stringify(match.conversation_tags)}`);
 
-    // Try posting this exact payload to Webhook to see the exact error response!
     const webhookUrl = process.env.NXLINK_WEBHOOK_URL || 'https://asia-east1-lark-demo-67aa3.cloudfunctions.net/nxlinkWebhook';
     const clientId = process.env.NXLINK_WEBHOOK_CLIENT_ID || 'nxw_41ef8e4dee35cd8e4c6c1d3e';
     const clientSecret = process.env.NXLINK_WEBHOOK_CLIENT_SECRET || '8ab7881cfcf9cd8428274ff2771875277c06be7404a3d4b20365bd584649ceea';
@@ -97,12 +97,7 @@ async function main() {
     console.log('Response:', text);
 
   } else {
-    console.log('❌ No record found matching ID 292f67bb');
-    console.log('All record IDs:');
-    convos.slice(0, 20).forEach(c => {
-      const idStr = c.conversation_transcript?.match(/\[nxlink_id:(.*?)\]/)?.[1] || c.id?.slice(0, 8);
-      console.log(`  ID: ${idStr}, Tags: ${JSON.stringify(c.conversation_tags)}, Name: ${c.customer_name}`);
-    });
+    console.log(`❌ No record found matching ID ${searchId}`);
   }
 }
 
