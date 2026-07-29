@@ -389,6 +389,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (autoSyncInterval === 'off') return;
+
+    // Trigger immediate sync check on load/mount
+    triggerNxlinkSync();
+
     const intervalMs = parseInt(autoSyncInterval, 10) * 60 * 1000;
     const timer = setInterval(() => {
       triggerNxlinkSync();
