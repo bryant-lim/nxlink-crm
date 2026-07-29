@@ -394,7 +394,7 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl font-bold font-heading text-slate-900 tracking-tight flex items-center">
             <MessageSquare size={24} className="mr-2 text-emerald-600" />
-            Conversations Dashboard
+            Conversation
           </h1>
         </div>
 

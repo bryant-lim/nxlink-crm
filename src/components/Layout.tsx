@@ -139,11 +139,11 @@ export default function Layout() {
                 ? 'bg-slate-100 text-slate-900 font-semibold' 
                 : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
             }`}
-            title={isCollapsed ? 'Dashboard' : ''}
+            title={isCollapsed ? 'Conversation' : ''}
           >
             <div className="flex items-center space-x-3">
               <LayoutDashboard size={18} className={location.pathname === '/' ? 'text-emerald-600' : 'text-slate-400'} />
-              {!isCollapsed && <span className="font-heading">Dashboard</span>}
+              {!isCollapsed && <span className="font-heading">Conversation</span>}
             </div>
           </Link>
 
