@@ -15,7 +15,6 @@ import {
   Volume2,
   Download,
   FileText,
-  MessageSquare,
   ArrowRight
 } from 'lucide-react';
 
@@ -218,9 +217,15 @@ export default function Customers() {
 
       {/* Customer Detail Drawer */}
       {selectedCustomer && (
-        <div className="fixed inset-0 z-40 overflow-hidden bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
+        <div 
+          onClick={() => setSelectedCustomer(null)}
+          className="fixed inset-0 z-40 overflow-hidden bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200 cursor-pointer"
+        >
           <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-screen max-w-2xl bg-white shadow-2xl flex flex-col">
+            <div 
+              onClick={(e) => e.stopPropagation()}
+              className="w-screen max-w-2xl bg-white shadow-2xl flex flex-col cursor-default"
+            >
               {/* Drawer Header */}
               <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
                 <div>
@@ -322,22 +327,20 @@ export default function Customers() {
 
       {/* Direct Conversation Details Modal inside Customer Directory */}
       {selectedDetailConvo && (
-        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+        <div 
+          onClick={() => setSelectedDetailConvo(null)}
+          className="fixed inset-0 z-50 overflow-hidden bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden cursor-default"
+          >
             {/* Modal Header */}
             <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
               <div>
                 <h3 className="text-base font-bold font-heading flex items-center">
                   Conversation Details #{getConvoId(selectedDetailConvo)}
                 </h3>
-                <p className="text-xs text-slate-400 font-mono mt-0.5">
-                  {selectedDetailConvo.customer_name || 'Customer'} • {selectedDetailConvo.phone_number || ''}
-                  <span className="ml-2 font-mono text-emerald-400">
-                    {selectedDetailConvo.conversation_date && selectedDetailConvo.conversation_time
-                      ? `${selectedDetailConvo.conversation_date} ${selectedDetailConvo.conversation_time}`
-                      : (selectedDetailConvo.conversation_date || '')}
-                  </span>
-                </p>
               </div>
               <button 
                 onClick={() => setSelectedDetailConvo(null)}
@@ -402,7 +405,7 @@ export default function Customers() {
                 </div>
               </div>
 
-              {/* Full Conversation Summary (Moved UP) */}
+              {/* Full Conversation Summary */}
               <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-2 shadow-2xs">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
                   <FileText size={14} className="mr-1.5 text-emerald-600" /> Full Conversation Summary
@@ -458,58 +461,6 @@ export default function Customers() {
                   <audio controls src={selectedDetailConvo.call_audio_url} className="w-full h-10 rounded-lg mt-1" />
                 </div>
               )}
-
-              {/* AI Transcript Thread */}
-              <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-3 shadow-2xs">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
-                  <MessageSquare size={14} className="mr-1.5 text-emerald-600" /> AI Transcript Dialogue Thread
-                </h4>
-                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 max-h-80 overflow-y-auto space-y-2.5 font-sans text-xs">
-                  {selectedDetailConvo.conversation_transcript ? (
-                    selectedDetailConvo.conversation_transcript.split('\n').filter(Boolean).map((line, idx) => {
-                      if (line.includes('[nxlink_id:')) return null;
-                      if (line.startsWith('Customer Sentiment:') || line.startsWith('Conversation Summary:') || line.startsWith('Next Steps:')) return null;
-
-                      if (line.startsWith('[Customer]:')) {
-                        const speech = line.replace(/^\[Customer\]:\s*/, '').replace(/^"|"$/g, '');
-                        return (
-                          <div key={idx} className="p-2.5 rounded-lg bg-white border border-slate-200 mr-6 shadow-2xs">
-                            <span className="font-bold font-heading block mb-1 text-[10px] text-slate-600 flex items-center">
-                              👤 Customer Utterance
-                            </span>
-                            <span className="text-slate-800 leading-relaxed font-medium">{speech}</span>
-                          </div>
-                        );
-                      }
-
-                      if (line.startsWith('[Bot]:')) {
-                        const speech = line.replace(/^\[Bot\]:\s*/, '').replace(/^"|"$/g, '');
-                        return (
-                          <div key={idx} className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 ml-6 shadow-2xs">
-                            <span className="font-bold font-heading block mb-1 text-[10px] text-emerald-800 flex items-center">
-                              🤖 AI Agent Response
-                            </span>
-                            <span className="text-emerald-950 leading-relaxed font-medium">{speech}</span>
-                          </div>
-                        );
-                      }
-
-                      if (line.startsWith('[System]:')) {
-                        const step = line.replace(/^\[System\]:\s*/, '');
-                        return (
-                          <div key={idx} className="py-1 px-2.5 bg-slate-200/70 text-slate-700 text-[10px] font-mono font-medium rounded text-center my-1">
-                            ⚙️ {step}
-                          </div>
-                        );
-                      }
-
-                      return null;
-                    })
-                  ) : (
-                    <p className="text-slate-400 italic">No transcript recorded for this conversation.</p>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
         </div>

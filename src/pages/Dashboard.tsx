@@ -663,15 +663,18 @@ export default function Dashboard() {
 
       {/* Selected Conversation Detail Drawer */}
       {selectedConvo && (
-        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
+        <div 
+          onClick={() => setSelectedConvo(null)}
+          className="fixed inset-0 z-50 overflow-hidden bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200 cursor-pointer"
+        >
           <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-screen max-w-2xl bg-white shadow-2xl flex flex-col">
+            <div 
+              onClick={(e) => e.stopPropagation()}
+              className="w-screen max-w-2xl bg-white shadow-2xl flex flex-col cursor-default"
+            >
               <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-bold font-heading">Conversation Details #{getConvoId(selectedConvo)}</h3>
-                  <p className="text-xs text-slate-400 font-mono mt-0.5">
-                    {selectedConvo.customer_name || 'Customer'} • {selectedConvo.phone_number || ''}
-                  </p>
                 </div>
                 <button 
                   onClick={() => setSelectedConvo(null)}
@@ -738,7 +741,7 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Full Conversation Summary (Moved UP) */}
+                {/* Full Conversation Summary */}
                 <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-2 shadow-2xs">
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
                     <FileText size={14} className="mr-1.5 text-emerald-600" /> Full Conversation Summary
@@ -793,65 +796,6 @@ export default function Dashboard() {
                     <audio controls src={selectedConvo.call_audio_url} className="w-full h-10 rounded-lg mt-1" />
                   </div>
                 )}
-
-                <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-2">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
-                    <FileText size={14} className="mr-1.5 text-emerald-600" /> Full Conversation Summary
-                  </h4>
-                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{selectedConvo.conversation_summary || 'No summary available.'}</p>
-                </div>
-
-                {/* AI TRANSCRIPT MESSAGES THREAD */}
-                <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-3">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
-                    <MessageSquare size={14} className="mr-1.5 text-emerald-600" /> AI Transcript Dialogue Thread
-                  </h4>
-                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 max-h-80 overflow-y-auto space-y-2 font-sans text-xs">
-                    {selectedConvo.conversation_transcript ? (
-                      selectedConvo.conversation_transcript.split('\n').filter(Boolean).map((line, idx) => {
-                        if (line.includes('[nxlink_id:')) return null;
-                        if (line.startsWith('Customer Sentiment:') || line.startsWith('Conversation Summary:') || line.startsWith('Next Steps:')) return null;
-
-                        if (line.startsWith('[Customer]:')) {
-                          const speech = line.replace(/^\[Customer\]:\s*/, '').replace(/^"|"$/g, '');
-                          return (
-                            <div key={idx} className="p-2.5 rounded-lg bg-white border border-slate-200 mr-6 shadow-2xs">
-                              <span className="font-bold font-heading block mb-1 text-[11px] text-slate-600 flex items-center">
-                                👤 Customer Utterance
-                              </span>
-                              <span className="text-slate-800 leading-relaxed font-medium">{speech}</span>
-                            </div>
-                          );
-                        }
-
-                        if (line.startsWith('[Bot]:')) {
-                          const speech = line.replace(/^\[Bot\]:\s*/, '').replace(/^"|"$/g, '');
-                          return (
-                            <div key={idx} className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 ml-6 shadow-2xs">
-                              <span className="font-bold font-heading block mb-1 text-[11px] text-emerald-800 flex items-center">
-                                🤖 AI Agent Response
-                              </span>
-                              <span className="text-emerald-950 leading-relaxed font-medium">{speech}</span>
-                            </div>
-                          );
-                        }
-
-                        if (line.startsWith('[System]:')) {
-                          const step = line.replace(/^\[System\]:\s*/, '');
-                          return (
-                            <div key={idx} className="py-1 px-2.5 bg-slate-200/70 text-slate-700 text-[11px] font-mono font-medium rounded text-center my-1.5">
-                              ⚙️ {step}
-                            </div>
-                          );
-                        }
-
-                        return null;
-                      })
-                    ) : (
-                      <p className="text-slate-400 italic">No transcript recorded for this conversation.</p>
-                    )}
-                  </div>
-                </div>
               </div>
             </div>
           </div>
