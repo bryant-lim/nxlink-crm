@@ -6,12 +6,12 @@ import type { DateFilterValue } from '../components/DateFilter';
 import { 
   Loader2, 
   Search, 
-  Phone, 
-  Mail, 
   FileText, 
   X,
   MessageSquare, 
   CheckCircle2, 
+  AlertCircle,
+  MinusCircle,
   ArrowRight,
   Clock,
   Volume2,
@@ -37,6 +37,9 @@ interface Conversation {
   conversation_transcript: string;
   next_steps: string;
   call_audio_url?: string;
+  webhook_status?: 'synced' | 'not_synced' | 'failed' | null;
+  webhook_error?: string | null;
+  webhook_synced_at?: string | null;
   created_at: string;
 }
 
@@ -46,6 +49,17 @@ function getConvoId(c: Conversation): string {
     if (match && match[1]) return match[1];
   }
   return c.id ? c.id.slice(0, 8) : 'N/A';
+}
+
+function getFormattedTimestamp(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const seconds = String(d.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
 export default function Dashboard() {
@@ -59,6 +73,13 @@ export default function Dashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
+  const [lastNxlinkSyncTime, setLastNxlinkSyncTime] = useState<string | null>(
+    () => localStorage.getItem('lastNxlinkSyncTime')
+  );
+  const [lastWebhookSyncTime, setLastWebhookSyncTime] = useState<string | null>(
+    () => localStorage.getItem('lastWebhookSyncTime')
+  );
+
   useEffect(() => {
     fetchConversations();
   }, []);
@@ -70,10 +91,6 @@ export default function Dashboard() {
       if (match) setSelectedConvo(match);
     }
   }, [location.state, conversations]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, dateFilter]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -95,18 +112,15 @@ export default function Dashboard() {
     if (!Array.isArray(tags) || tags.length === 0) return false;
     const lowerTags = tags.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : ''));
 
-    // Exclude routing-only tags (e.g. ["to agent"], ["branch agent"], ["to agent", "branch agent"])
     const routingOnlyTags = ['to agent', 'branch agent', 'contact agent'];
     const isOnlyRouting = lowerTags.every(t => routingOnlyTags.includes(t));
     if (isOnlyRouting) return false;
 
-    // Exclude non-lead operational flows (Emergency, Check Booking)
     const hasEmergencyOrCheckBooking = lowerTags.some(t =>
       t.includes('emergency') || t.includes('check booking')
     );
     if (hasEmergencyOrCheckBooking) return false;
 
-    // Sync if contains Hot Lead or Booking Appointment
     return lowerTags.some(t => t.includes('hot lead') || t.includes('booking appointment'));
   };
 
@@ -147,15 +161,15 @@ export default function Dashboard() {
         }
       };
 
+      const nowTs = getFormattedTimestamp();
+
       try {
-        // Attempt via Netlify backend proxy to bypass browser CORS preflight restrictions
         let resp = await fetch('/.netlify/functions/push-webhook', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
 
-        // Fallback to direct call if running in local dev without netlify CLI
         if (!resp.ok && (resp.status === 404 || resp.status === 502)) {
           resp = await fetch(webhookUrl, {
             method: 'POST',
@@ -168,12 +182,55 @@ export default function Dashboard() {
           });
         }
 
-        if (resp.ok) success++;
-        else fail++;
-      } catch (err) {
+        if (resp.ok) {
+          success++;
+          await supabase.from('conversations').update({
+            webhook_status: 'synced',
+            webhook_error: null,
+            webhook_synced_at: nowTs
+          }).eq('id', c.id);
+
+          c.webhook_status = 'synced';
+          c.webhook_error = null;
+          c.webhook_synced_at = nowTs;
+        } else {
+          fail++;
+          const errText = await resp.text().catch(() => '');
+          let errMsg = `HTTP ${resp.status}: ${resp.statusText || 'Webhook error'}`;
+          if (errText && errText.toLowerCase().includes('already')) {
+            errMsg = `Record with Conversation ID ${getConvoId(c)} already ingested in Lark Base`;
+          } else if (errText) {
+            errMsg = errText.slice(0, 120);
+          }
+
+          await supabase.from('conversations').update({
+            webhook_status: 'failed',
+            webhook_error: errMsg,
+            webhook_synced_at: nowTs
+          }).eq('id', c.id);
+
+          c.webhook_status = 'failed';
+          c.webhook_error = errMsg;
+          c.webhook_synced_at = nowTs;
+        }
+      } catch (err: any) {
         fail++;
+        const errMsg = err.message || 'Network/CORS fetch error';
+        await supabase.from('conversations').update({
+          webhook_status: 'failed',
+          webhook_error: errMsg,
+          webhook_synced_at: nowTs
+        }).eq('id', c.id);
+
+        c.webhook_status = 'failed';
+        c.webhook_error = errMsg;
+        c.webhook_synced_at = nowTs;
       }
     }
+
+    const currentWebhookTs = getFormattedTimestamp();
+    setLastWebhookSyncTime(currentWebhookTs);
+    localStorage.setItem('lastWebhookSyncTime', currentWebhookTs);
 
     setWebhookSyncing(false);
     if (fail === 0) {
@@ -191,22 +248,18 @@ export default function Dashboard() {
     new Set(conversations.flatMap(c => c.conversation_tags || []))
   ).sort();
 
-  // Sort conversations descending (newest timestamp first so 1st result is latest)
   const sorted = [...conversations].sort((a, b) => {
     const timeA = new Date(a.created_at || a.conversation_date).getTime();
     const timeB = new Date(b.created_at || b.conversation_date).getTime();
     return timeB - timeA;
   });
 
-  // Apply Date Filter & Search Term Filter
   const dateFiltered = filterRecordsByDate(sorted, c => c.created_at || c.conversation_date, dateFilter);
 
   const filtered = dateFiltered.filter(c => {
-    // Hide untagged records unless showUntagged is enabled
     const hasTags = Array.isArray(c.conversation_tags) && c.conversation_tags.length > 0;
     if (!showUntagged && !hasTags) return false;
 
-    // Filter by specific tag if selected
     if (selectedTagFilter !== 'all') {
       if (!c.conversation_tags || !c.conversation_tags.includes(selectedTagFilter)) {
         return false;
@@ -236,9 +289,7 @@ export default function Dashboard() {
 
   const [nxlinkSyncing, setNxlinkSyncing] = useState(false);
   const [autoSyncInterval, setAutoSyncInterval] = useState<'off' | '1' | '5' | '15' | '30'>('5');
-  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
 
-  // Deletion Feature State
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -297,12 +348,13 @@ export default function Dashboard() {
       setWebhookStatus(`❌ Sync Notice: ${e.message || 'Could not reach sync endpoint'}`);
     } finally {
       setNxlinkSyncing(false);
-      setLastSyncTime(new Date().toLocaleTimeString());
+      const currentNxlinkTs = getFormattedTimestamp();
+      setLastNxlinkSyncTime(currentNxlinkTs);
+      localStorage.setItem('lastNxlinkSyncTime', currentNxlinkTs);
       setTimeout(() => setWebhookStatus(null), 5000);
     }
   };
 
-  // Configurable Auto-Sync Polling Effect
   useEffect(() => {
     if (autoSyncInterval === 'off') return;
     const intervalMs = parseInt(autoSyncInterval, 10) * 60 * 1000;
@@ -328,21 +380,26 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold font-heading text-slate-900 tracking-tight flex items-center">
             <MessageSquare size={24} className="mr-2 text-emerald-600" />
             Conversations Dashboard
-            {lastSyncTime && <span className="ml-3 text-xs font-mono text-emerald-700 font-normal">Last synced: {lastSyncTime}</span>}
           </h1>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            disabled={nxlinkSyncing}
-            onClick={triggerNxlinkSync}
-            className="py-2 px-3.5 bg-blue-600 hover:bg-blue-700 text-white font-heading text-xs font-bold rounded-lg transition-colors flex items-center justify-center space-x-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
-          >
-            {nxlinkSyncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-            <span>Sync NXLINK Conversations</span>
-          </button>
+          {/* Sync NXLINK Button & Last Sync Date */}
+          <div className="flex flex-col items-start">
+            <button
+              disabled={nxlinkSyncing}
+              onClick={triggerNxlinkSync}
+              className="py-2 px-3.5 bg-blue-600 hover:bg-blue-700 text-white font-heading text-xs font-bold rounded-lg transition-colors flex items-center justify-center space-x-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
+            >
+              {nxlinkSyncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              <span>Sync NXLINK Conversations</span>
+            </button>
+            <span className="text-[10px] font-mono text-slate-500 mt-1">
+              Last NXLINK Sync: {lastNxlinkSyncTime || 'Not run yet'}
+            </span>
+          </div>
 
-          <div className="flex items-center space-x-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-heading shadow-2xs">
+          <div className="flex items-center space-x-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-heading shadow-2xs self-start">
             <Clock size={13} className="text-slate-400" />
             <span className="text-slate-500 font-semibold">Auto-Sync:</span>
             <select
@@ -364,21 +421,27 @@ export default function Dashboard() {
                 setTargetToDelete(null);
                 setDeleteModalOpen(true);
               }}
-              className="py-2 px-3.5 bg-red-600 hover:bg-red-700 text-white font-heading text-xs font-bold rounded-lg transition-colors flex items-center justify-center space-x-1.5 shadow-2xs cursor-pointer animate-in fade-in duration-150"
+              className="py-2 px-3.5 bg-red-600 hover:bg-red-700 text-white font-heading text-xs font-bold rounded-lg transition-colors flex items-center justify-center space-x-1.5 shadow-2xs cursor-pointer animate-in fade-in duration-150 self-start"
             >
               <Trash2 size={14} />
               <span>Delete Selected ({selectedRowIds.length})</span>
             </button>
           )}
 
-          <button
-            disabled={webhookSyncing}
-            onClick={() => pushToWebhook(filtered)}
-            className="py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-heading text-xs font-bold rounded-lg transition-colors flex items-center justify-center shadow-2xs cursor-pointer disabled:opacity-50"
-          >
-            {webhookSyncing ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}
-            <span>Sync Tagged Records to Webhook</span>
-          </button>
+          {/* Sync Webhook Button & Last Sync Date */}
+          <div className="flex flex-col items-start">
+            <button
+              disabled={webhookSyncing}
+              onClick={() => pushToWebhook(filtered)}
+              className="py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-heading text-xs font-bold rounded-lg transition-colors flex items-center justify-center shadow-2xs cursor-pointer disabled:opacity-50"
+            >
+              {webhookSyncing ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}
+              <span>Sync Tagged Records to Webhook</span>
+            </button>
+            <span className="text-[10px] font-mono text-slate-500 mt-1">
+              Last Webhook Sync: {lastWebhookSyncTime || 'Not run yet'}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -395,7 +458,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Date Filter & Search Controls Block (Placed After Statistics Bar) */}
+      {/* Controls Block */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <DateFilter value={dateFilter} onChange={setDateFilter} />
@@ -440,7 +503,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Main Conversation Container */}
+      {/* Main Table Container */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-2xs overflow-hidden">
         {loading ? (
           <div className="py-20 text-center">
@@ -479,6 +542,7 @@ export default function Dashboard() {
                     <th className="py-3 px-4">Customer</th>
                     <th className="py-3 px-4">Phone</th>
                     <th className="py-3 px-4">Tags</th>
+                    <th className="py-3 px-4">Webhook Sync</th>
                     <th className="py-3 px-4">Summary</th>
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
@@ -531,6 +595,25 @@ export default function Dashboard() {
                           ) : <span className="text-slate-400 text-xs">-</span>}
                         </div>
                       </td>
+                      {/* Webhook Sync Status Flag */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        {convo.webhook_status === 'synced' ? (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-bold font-heading bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center">
+                            <CheckCircle2 size={12} className="mr-1 text-emerald-600" /> Synced
+                          </span>
+                        ) : convo.webhook_status === 'failed' ? (
+                          <span 
+                            className="px-2 py-0.5 rounded text-[11px] font-bold font-heading bg-red-50 text-red-800 border border-red-200 inline-flex items-center cursor-help"
+                            title={`Failure Reason: ${convo.webhook_error || 'Webhook push error'}`}
+                          >
+                            <AlertCircle size={12} className="mr-1 text-red-600" /> Failed
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-medium font-heading bg-slate-100 text-slate-600 border border-slate-200 inline-flex items-center">
+                            <MinusCircle size={12} className="mr-1 text-slate-400" /> Not Synced
+                          </span>
+                        )}
+                      </td>
                       <td className="py-3.5 px-4 text-xs text-slate-500 max-w-xs truncate">
                         {convo.conversation_summary || '-'}
                       </td>
@@ -552,72 +635,29 @@ export default function Dashboard() {
               </table>
             </div>
 
-            {/* Mobile Touch Stack View */}
-            <div className="md:hidden divide-y divide-slate-100">
-              {paginatedConvos.map((convo) => (
-                <div 
-                  key={convo.id}
-                  onClick={() => setSelectedConvo(convo)}
-                  className="p-4 space-y-2 hover:bg-slate-50 active:bg-slate-100 transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-900 font-heading text-base">
-                      {convo.customer_name || convo.company_name || 'Unknown Contact'}
-                    </span>
-                    <span className="text-[11px] text-slate-500 font-mono">
-                      {convo.conversation_date && convo.conversation_time
-                        ? `${convo.conversation_date} ${convo.conversation_time}`
-                        : (convo.conversation_date || '-')}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center space-x-2 text-xs text-slate-600 font-mono">
-                    <Phone size={12} className="text-emerald-600" />
-                    <span>{convo.phone_number || 'No Phone'}</span>
-                  </div>
-
-                  {convo.conversation_summary && (
-                    <p className="text-xs text-slate-600 line-clamp-2 bg-slate-50 p-2 rounded border border-slate-100">
-                      {convo.conversation_summary}
-                    </p>
-                  )}
-
-                  <div className="flex flex-wrap gap-1 pt-1">
-                    {convo.conversation_tags?.map((t, idx) => (
-                      <span key={idx} className="px-1.5 py-0.5 bg-slate-100 text-slate-700 font-medium text-[10px] rounded border border-slate-200">
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-
             {/* Pagination Controls */}
-            <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-heading">
-              <span className="text-slate-500 font-mono">
-                Showing {filtered.length > 0 ? startIndex + 1 : 0} to {Math.min(startIndex + itemsPerPage, filtered.length)} of {filtered.length} conversations
+            <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs font-heading">
+              <span className="text-slate-500">
+                Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filtered.length)} of {filtered.length}
               </span>
 
               <div className="flex items-center space-x-2">
                 <button
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 font-bold hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs transition-colors flex items-center cursor-pointer"
+                  className="px-2.5 py-1 bg-white border border-slate-200 rounded text-slate-700 hover:bg-slate-100 disabled:opacity-40 cursor-pointer font-medium"
                 >
-                  <ChevronLeft size={14} className="mr-1" /> Previous
+                  <ChevronLeft size={14} />
                 </button>
-
-                <span className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-mono font-bold text-slate-800 border-emerald-300 bg-emerald-50/40">
+                <span className="text-slate-700 font-semibold font-mono">
                   Page {currentPage} of {totalPages}
                 </span>
-
                 <button
-                  disabled={currentPage >= totalPages}
+                  disabled={currentPage === totalPages}
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 font-bold hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs transition-colors flex items-center cursor-pointer"
+                  className="px-2.5 py-1 bg-white border border-slate-200 rounded text-slate-700 hover:bg-slate-100 disabled:opacity-40 cursor-pointer font-medium"
                 >
-                  Next <ChevronRight size={14} className="ml-1" />
+                  <ChevronRight size={14} />
                 </button>
               </div>
             </div>
@@ -625,164 +665,166 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Slide-over Detail Drawer */}
+      {/* Selected Conversation Detail Drawer */}
       {selectedConvo && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div 
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
-            onClick={() => setSelectedConvo(null)}
-          ></div>
-
-          <div className="bg-white w-full max-w-2xl h-full shadow-2xl flex flex-col relative z-10 animate-in slide-in-from-right duration-200 border-l border-slate-200">
-            <div className="flex items-center justify-between p-5 border-b border-slate-200 bg-slate-50">
-              <div>
-                <div className="flex items-center space-x-2">
-                  <h2 className="text-xl font-bold font-heading text-slate-900">
-                    {selectedConvo.customer_name || selectedConvo.company_name || 'Unknown Contact'}
-                  </h2>
-                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-mono text-xs font-bold rounded border border-emerald-200">
-                    ID: #{getConvoId(selectedConvo)}
-                  </span>
+        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
+            <div className="w-screen max-w-2xl bg-white shadow-2xl flex flex-col">
+              <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold font-heading">Conversation Details #{getConvoId(selectedConvo)}</h3>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">
+                    {selectedConvo.customer_name || 'Customer'} • {selectedConvo.phone_number || ''}
+                  </p>
                 </div>
-                <div className="flex flex-wrap gap-3 text-xs text-slate-500 mt-1 font-mono">
-                  {selectedConvo.phone_number && <span className="flex items-center"><Phone size={12} className="mr-1 text-emerald-600" /> {selectedConvo.phone_number}</span>}
-                  {selectedConvo.email_address && <span className="flex items-center"><Mail size={12} className="mr-1 text-emerald-600" /> {selectedConvo.email_address}</span>}
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => {
-                    setTargetToDelete({ id: selectedConvo.id, name: selectedConvo.customer_name });
-                    setDeleteModalOpen(true);
-                  }}
-                  className="py-1.5 px-3 bg-red-50 hover:bg-red-100 text-red-700 font-heading text-xs font-bold rounded-lg border border-red-200 transition-colors flex items-center shadow-2xs cursor-pointer"
-                  title="Delete Record"
-                >
-                  <Trash2 size={13} className="mr-1 text-red-600" />
-                  <span>Delete</span>
-                </button>
-                <button
-                  disabled={webhookSyncing}
-                  onClick={() => pushToWebhook([selectedConvo])}
-                  className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-heading text-xs font-bold rounded-lg transition-colors flex items-center shadow-2xs cursor-pointer disabled:opacity-50"
-                >
-                  {webhookSyncing ? <Loader2 size={13} className="animate-spin mr-1.5" /> : null}
-                  <span>Push to Webhook</span>
-                </button>
                 <button 
                   onClick={() => setSelectedConvo(null)}
-                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                  className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                 >
                   <X size={20} />
                 </button>
               </div>
-            </div>
 
-            <div className="flex-1 overflow-y-auto p-5 space-y-6">
+              <div className="flex-1 overflow-y-auto p-5 space-y-6">
+                {/* Webhook Sync Status Card */}
+                <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-2 shadow-2xs">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center justify-between">
+                    <span className="flex items-center"><RefreshCw size={14} className="mr-1.5 text-emerald-600" /> Webhook Sync Status</span>
+                  </h4>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-white border border-slate-200 p-4 rounded-xl">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading mb-2">Company Name</h4>
-                  <p className="text-sm text-slate-800 font-medium">{selectedConvo.company_name || 'Individual / N/A'}</p>
-                </div>
-                <div className="bg-white border border-slate-200 p-4 rounded-xl">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading mb-2">Customer Sentiment</h4>
-                  <p className="text-sm text-slate-800 font-medium">{selectedConvo.customer_sentiment || 'Neutral'}</p>
-                </div>
-                <div className="bg-white border border-slate-200 p-4 rounded-xl">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading mb-2">Tags</h4>
-                  <div className="flex flex-wrap gap-1">
-                    {selectedConvo.conversation_tags?.map((t, idx) => (
-                      <span key={idx} className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-heading text-xs font-medium rounded border border-emerald-200">
-                        {t}
-                      </span>
-                    )) || <span className="text-xs text-slate-400">No tags</span>}
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-2">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
-                  <ArrowRight size={14} className="mr-1.5 text-emerald-600" /> Next Steps
-                </h4>
-                <p className="text-sm text-slate-700">{selectedConvo.next_steps || 'None provided'}</p>
-              </div>
-
-              {selectedConvo.call_audio_url && (
-                <div className="bg-emerald-50/60 border border-emerald-200 p-4 rounded-xl space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-emerald-900 uppercase tracking-wider font-heading flex items-center">
-                      <Volume2 size={15} className="mr-1.5 text-emerald-600" /> Call Recording Audio
-                    </h4>
-                    <a 
-                      href={selectedConvo.call_audio_url} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 underline flex items-center"
-                    >
-                      <Download size={13} className="mr-1" /> Open / Download MP3
-                    </a>
-                  </div>
-                  <audio controls src={selectedConvo.call_audio_url} className="w-full h-10 rounded-lg mt-1" />
-                </div>
-              )}
-
-              <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-2">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
-                  <FileText size={14} className="mr-1.5 text-emerald-600" /> Full Conversation Summary
-                </h4>
-                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{selectedConvo.conversation_summary || 'No summary available.'}</p>
-              </div>
-
-              {/* AI TRANSCRIPT MESSAGES THREAD */}
-              <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-3">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
-                  <MessageSquare size={14} className="mr-1.5 text-emerald-600" /> AI Transcript Dialogue Thread
-                </h4>
-                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 max-h-80 overflow-y-auto space-y-2 font-sans text-xs">
-                  {selectedConvo.conversation_transcript ? (
-                    selectedConvo.conversation_transcript.split('\n').filter(Boolean).map((line, idx) => {
-                      if (line.includes('[nxlink_id:')) return null;
-                      if (line.startsWith('Customer Sentiment:') || line.startsWith('Conversation Summary:') || line.startsWith('Next Steps:')) return null;
-
-                      if (line.startsWith('[Customer]:')) {
-                        const speech = line.replace(/^\[Customer\]:\s*/, '').replace(/^"|"$/g, '');
-                        return (
-                          <div key={idx} className="p-2.5 rounded-lg bg-white border border-slate-200 mr-6 shadow-2xs">
-                            <span className="font-bold font-heading block mb-1 text-[11px] text-slate-600 flex items-center">
-                              👤 Customer Utterance
-                            </span>
-                            <span className="text-slate-800 leading-relaxed font-medium">{speech}</span>
-                          </div>
-                        );
-                      }
-
-                      if (line.startsWith('[Bot]:')) {
-                        const speech = line.replace(/^\[Bot\]:\s*/, '').replace(/^"|"$/g, '');
-                        return (
-                          <div key={idx} className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 ml-6 shadow-2xs">
-                            <span className="font-bold font-heading block mb-1 text-[11px] text-emerald-800 flex items-center">
-                              🤖 AI Agent Response
-                            </span>
-                            <span className="text-emerald-950 leading-relaxed font-medium">{speech}</span>
-                          </div>
-                        );
-                      }
-
-                      if (line.startsWith('[System]:')) {
-                        const step = line.replace(/^\[System\]:\s*/, '');
-                        return (
-                          <div key={idx} className="py-1 px-2.5 bg-slate-200/70 text-slate-700 text-[11px] font-mono font-medium rounded text-center my-1.5">
-                            ⚙️ {step}
-                          </div>
-                        );
-                      }
-
-                      return null;
-                    })
+                  {selectedConvo.webhook_status === 'synced' ? (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs space-y-1">
+                      <div className="flex items-center font-bold text-emerald-800 font-heading">
+                        <CheckCircle2 size={15} className="mr-1.5 text-emerald-600" />
+                        Successfully Synced to Webhook Base
+                      </div>
+                      {selectedConvo.webhook_synced_at && (
+                        <p className="text-emerald-700 font-mono text-[11px]">Synced timestamp: {selectedConvo.webhook_synced_at}</p>
+                      )}
+                    </div>
+                  ) : selectedConvo.webhook_status === 'failed' ? (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs space-y-2">
+                      <div className="flex items-center font-bold text-red-900 font-heading">
+                        <AlertCircle size={15} className="mr-1.5 text-red-600" />
+                        Webhook Push Failed
+                      </div>
+                      <div className="bg-white p-2.5 rounded border border-red-200 text-red-800 font-mono text-[11px] leading-relaxed">
+                        <strong className="block text-red-900 mb-0.5">Failure Reason:</strong>
+                        {selectedConvo.webhook_error || 'Record error / CORS failure'}
+                      </div>
+                    </div>
                   ) : (
-                    <p className="text-slate-400 italic">No transcript recorded for this conversation.</p>
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 font-heading flex items-center">
+                      <MinusCircle size={15} className="mr-1.5 text-slate-400" />
+                      <span>Not Synced to Webhook yet (Requires Hot Lead or Booking Appointment tags)</span>
+                    </div>
                   )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="bg-white border border-slate-200 p-4 rounded-xl">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading mb-2">Company Name</h4>
+                    <p className="text-sm text-slate-800 font-medium">{selectedConvo.company_name || 'Individual / N/A'}</p>
+                  </div>
+                  <div className="bg-white border border-slate-200 p-4 rounded-xl">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading mb-2">Customer Sentiment</h4>
+                    <p className="text-sm text-slate-800 font-medium">{selectedConvo.customer_sentiment || 'Neutral'}</p>
+                  </div>
+                  <div className="bg-white border border-slate-200 p-4 rounded-xl">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading mb-2">Tags</h4>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedConvo.conversation_tags?.map((t, idx) => (
+                        <span key={idx} className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-heading text-xs font-medium rounded border border-emerald-200">
+                          {t}
+                        </span>
+                      )) || <span className="text-xs text-slate-400">No tags</span>}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-2">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
+                    <ArrowRight size={14} className="mr-1.5 text-emerald-600" /> Next Steps
+                  </h4>
+                  <p className="text-sm text-slate-700">{selectedConvo.next_steps || 'None provided'}</p>
+                </div>
+
+                {selectedConvo.call_audio_url && (
+                  <div className="bg-emerald-50/60 border border-emerald-200 p-4 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-emerald-900 uppercase tracking-wider font-heading flex items-center">
+                        <Volume2 size={15} className="mr-1.5 text-emerald-600" /> Call Recording Audio
+                      </h4>
+                      <a 
+                        href={selectedConvo.call_audio_url} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 underline flex items-center"
+                      >
+                        <Download size={13} className="mr-1" /> Open / Download MP3
+                      </a>
+                    </div>
+                    <audio controls src={selectedConvo.call_audio_url} className="w-full h-10 rounded-lg mt-1" />
+                  </div>
+                )}
+
+                <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-2">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
+                    <FileText size={14} className="mr-1.5 text-emerald-600" /> Full Conversation Summary
+                  </h4>
+                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{selectedConvo.conversation_summary || 'No summary available.'}</p>
+                </div>
+
+                {/* AI TRANSCRIPT MESSAGES THREAD */}
+                <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-3">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
+                    <MessageSquare size={14} className="mr-1.5 text-emerald-600" /> AI Transcript Dialogue Thread
+                  </h4>
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 max-h-80 overflow-y-auto space-y-2 font-sans text-xs">
+                    {selectedConvo.conversation_transcript ? (
+                      selectedConvo.conversation_transcript.split('\n').filter(Boolean).map((line, idx) => {
+                        if (line.includes('[nxlink_id:')) return null;
+                        if (line.startsWith('Customer Sentiment:') || line.startsWith('Conversation Summary:') || line.startsWith('Next Steps:')) return null;
+
+                        if (line.startsWith('[Customer]:')) {
+                          const speech = line.replace(/^\[Customer\]:\s*/, '').replace(/^"|"$/g, '');
+                          return (
+                            <div key={idx} className="p-2.5 rounded-lg bg-white border border-slate-200 mr-6 shadow-2xs">
+                              <span className="font-bold font-heading block mb-1 text-[11px] text-slate-600 flex items-center">
+                                👤 Customer Utterance
+                              </span>
+                              <span className="text-slate-800 leading-relaxed font-medium">{speech}</span>
+                            </div>
+                          );
+                        }
+
+                        if (line.startsWith('[Bot]:')) {
+                          const speech = line.replace(/^\[Bot\]:\s*/, '').replace(/^"|"$/g, '');
+                          return (
+                            <div key={idx} className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 ml-6 shadow-2xs">
+                              <span className="font-bold font-heading block mb-1 text-[11px] text-emerald-800 flex items-center">
+                                🤖 AI Agent Response
+                              </span>
+                              <span className="text-emerald-950 leading-relaxed font-medium">{speech}</span>
+                            </div>
+                          );
+                        }
+
+                        if (line.startsWith('[System]:')) {
+                          const step = line.replace(/^\[System\]:\s*/, '');
+                          return (
+                            <div key={idx} className="py-1 px-2.5 bg-slate-200/70 text-slate-700 text-[11px] font-mono font-medium rounded text-center my-1.5">
+                              ⚙️ {step}
+                            </div>
+                          );
+                        }
+
+                        return null;
+                      })
+                    ) : (
+                      <p className="text-slate-400 italic">No transcript recorded for this conversation.</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -790,35 +832,28 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Confirmation Modal for Record Deletion */}
+      {/* Deletion Modal */}
       {deleteModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200">
-            <div className="flex items-center space-x-3 text-red-600">
-              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                <Trash2 size={20} />
-              </div>
-              <h3 className="text-lg font-bold font-heading text-slate-900">Confirm Record Deletion</h3>
-            </div>
-            <p className="text-sm text-slate-600 font-sans leading-relaxed">
-              {targetToDelete
-                ? `Are you sure you want to delete conversation #${getConvoId(targetToDelete as any)} (${targetToDelete.name || 'Unknown Contact'})? This action cannot be undone.`
-                : `Are you sure you want to delete ${selectedRowIds.length} selected conversation record(s)? This action cannot be undone.`}
+            <h3 className="text-lg font-bold font-heading text-slate-900">Confirm Deletion</h3>
+            <p className="text-xs text-slate-600 font-sans">
+              Are you sure you want to delete {targetToDelete ? `record #${targetToDelete.id.slice(0, 8)} (${targetToDelete.name || 'Customer'})` : `${selectedRowIds.length} selected record(s)`}? This action cannot be undone.
             </p>
-            <div className="flex justify-end space-x-3 pt-2">
+            <div className="flex items-center justify-end space-x-3 pt-2">
               <button
                 disabled={deleting}
-                onClick={() => { setDeleteModalOpen(false); setTargetToDelete(null); }}
-                className="px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold font-heading transition-colors cursor-pointer"
+                onClick={() => setDeleteModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold font-heading text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 disabled={deleting}
                 onClick={confirmAndDelete}
-                className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg text-xs font-bold font-heading transition-colors flex items-center shadow-xs cursor-pointer disabled:opacity-50"
+                className="px-4 py-2 text-xs font-bold font-heading bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center space-x-1.5 cursor-pointer shadow-2xs"
               >
-                {deleting ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Trash2 size={14} className="mr-1.5" />}
+                {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                 <span>Delete Permanently</span>
               </button>
             </div>

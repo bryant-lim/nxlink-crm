@@ -349,6 +349,38 @@ export default function Customers() {
 
             {/* Modal Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              {/* Webhook Sync Status Card */}
+              <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-2 shadow-2xs">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
+                  Webhook Sync Status
+                </h4>
+
+                {selectedDetailConvo.webhook_status === 'synced' ? (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs space-y-1">
+                    <div className="flex items-center font-bold text-emerald-800 font-heading">
+                      Successfully Synced to Webhook Base
+                    </div>
+                    {selectedDetailConvo.webhook_synced_at && (
+                      <p className="text-emerald-700 font-mono text-[11px]">Synced timestamp: {selectedDetailConvo.webhook_synced_at}</p>
+                    )}
+                  </div>
+                ) : selectedDetailConvo.webhook_status === 'failed' ? (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs space-y-2">
+                    <div className="flex items-center font-bold text-red-900 font-heading">
+                      Webhook Push Failed
+                    </div>
+                    <div className="bg-white p-2.5 rounded border border-red-200 text-red-800 font-mono text-[11px] leading-relaxed">
+                      <strong className="block text-red-900 mb-0.5">Failure Reason:</strong>
+                      {selectedDetailConvo.webhook_error || 'Record error / CORS failure'}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 font-heading flex items-center">
+                    <span>Not Synced to Webhook yet (Requires Hot Lead or Booking Appointment tags)</span>
+                  </div>
+                )}
+              </div>
+
               {/* Metadata Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl">

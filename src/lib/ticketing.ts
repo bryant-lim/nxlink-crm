@@ -76,6 +76,9 @@ export interface ConversationData {
   conversation_transcript?: string | null;
   next_steps?: string | null;
   call_audio_url?: string | null;
+  webhook_status?: 'synced' | 'not_synced' | 'failed' | null;
+  webhook_error?: string | null;
+  webhook_synced_at?: string | null;
   created_at: string;
 }
 
