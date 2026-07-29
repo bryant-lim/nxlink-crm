@@ -312,14 +312,22 @@ async function main() {
     // Extract sentiment, summary, next steps structured metadata
     const { sentiment, summary, nextSteps, extractedName, extractedPhone } = extractSummaryMetadata(messages, conv);
 
-    // Date formatting
+    // Date formatting (NXLINK created_at timestamp)
     let convDate = new Date().toISOString().split('T')[0];
     let convTime = new Date().toISOString().split('T')[1].split('.')[0];
-    if (conv.created_at) {
-      const d = new Date(typeof conv.created_at === 'number' ? conv.created_at * 1000 : conv.created_at);
-      if (!isNaN(d.getTime())) {
-        convDate = d.toISOString().split('T')[0];
-        convTime = d.toISOString().split('T')[1].split('.')[0];
+    const rawTs = conv.created_at || conv.createdAt || conv.create_time || conv.createTime;
+    if (rawTs) {
+      const tsMs = typeof rawTs === 'number' ? (rawTs > 10000000000 ? rawTs : rawTs * 1000) : new Date(rawTs).getTime();
+      if (!isNaN(tsMs)) {
+        const d = new Date(tsMs);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        const ss = String(d.getSeconds()).padStart(2, '0');
+        convDate = `${y}-${m}-${day}`;
+        convTime = `${hh}:${mm}:${ss}`;
       }
     }
 

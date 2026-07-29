@@ -171,6 +171,21 @@ export const handler: Handler = async () => {
 
       const rawTranscript = `[nxlink_id:${convId}]`;
 
+      const rawTs = conv.created_at || conv.createdAt || conv.create_time || conv.createTime;
+      let dateObj = new Date();
+      if (rawTs) {
+        const tsMs = typeof rawTs === 'number' ? (rawTs > 10000000000 ? rawTs : rawTs * 1000) : new Date(rawTs).getTime();
+        if (!isNaN(tsMs)) dateObj = new Date(tsMs);
+      }
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      const hours = String(dateObj.getHours()).padStart(2, '0');
+      const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+      const seconds = String(dateObj.getSeconds()).padStart(2, '0');
+      const cDateStr = `${year}-${month}-${day}`;
+      const cTimeStr = `${hours}:${minutes}:${seconds}`;
+
       const { error } = await supabase.from('conversations').insert([{
         customer_name: meta.customer_name,
         phone_number: meta.phone_number,
@@ -180,8 +195,8 @@ export const handler: Handler = async () => {
         company_name: conv.company_name || null,
         email_address: conv.email_address || null,
         conversation_tags: tagsList,
-        conversation_date: new Date().toISOString().split('T')[0],
-        conversation_time: new Date().toISOString().split('T')[1].split('.')[0],
+        conversation_date: cDateStr,
+        conversation_time: cTimeStr,
         conversation_transcript: rawTranscript,
         call_audio_url: callAudioUrl
       }]);

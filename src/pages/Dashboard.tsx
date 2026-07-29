@@ -10,10 +10,8 @@ import {
   Phone, 
   Mail, 
   FileText, 
-  X, 
+  X,
   MessageSquare, 
-  AlertTriangle, 
-  Users, 
   TicketPlus, 
   CheckCircle2, 
   ArrowRight,
@@ -25,7 +23,8 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
-  Trash2
+  Trash2,
+  Tag
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -268,6 +267,13 @@ export default function Dashboard() {
     setTimeout(() => setWebhookStatus(null), 5000);
   };
 
+  const [showUntagged, setShowUntagged] = useState<boolean>(false);
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string>('all');
+
+  const availableTags = Array.from(
+    new Set(conversations.flatMap(c => c.conversation_tags || []))
+  ).sort();
+
   // Sort conversations descending (newest timestamp first so 1st result is latest)
   const sorted = [...conversations].sort((a, b) => {
     const timeA = new Date(a.created_at || a.conversation_date).getTime();
@@ -279,6 +285,17 @@ export default function Dashboard() {
   const dateFiltered = filterRecordsByDate(sorted, c => c.created_at || c.conversation_date, dateFilter);
 
   const filtered = dateFiltered.filter(c => {
+    // Hide untagged records unless showUntagged is enabled
+    const hasTags = Array.isArray(c.conversation_tags) && c.conversation_tags.length > 0;
+    if (!showUntagged && !hasTags) return false;
+
+    // Filter by specific tag if selected
+    if (selectedTagFilter !== 'all') {
+      if (!c.conversation_tags || !c.conversation_tags.includes(selectedTagFilter)) {
+        return false;
+      }
+    }
+
     const term = searchTerm.toLowerCase();
     return (
       (c.customer_name?.toLowerCase() || '').includes(term) ||
@@ -299,7 +316,6 @@ export default function Dashboard() {
     const t = (c.conversation_tags || []).join(' ').toLowerCase();
     return s.includes('emergency') || s.includes('negative') || t.includes('dh - emergency');
   }).length;
-  const uniquePhones = new Set(filtered.map(c => c.phone_number).filter(Boolean)).size;
 
   const [nxlinkSyncing, setNxlinkSyncing] = useState(false);
   const [autoSyncInterval, setAutoSyncInterval] = useState<'off' | '1' | '5' | '15' | '30'>('5');
@@ -395,11 +411,8 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold font-heading text-slate-900 tracking-tight flex items-center">
             <MessageSquare size={24} className="mr-2 text-emerald-600" />
             Conversations Dashboard
+            {lastSyncTime && <span className="ml-3 text-xs font-mono text-emerald-700 font-normal">Last synced: {lastSyncTime}</span>}
           </h1>
-          <p className="text-sm text-slate-500 font-sans">
-            Live AI agent conversation feed, sentiment insights, and ticket dispatch.
-            {lastSyncTime && <span className="ml-2 text-xs font-mono text-emerald-700">Last synced: {lastSyncTime}</span>}
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -449,52 +462,64 @@ export default function Dashboard() {
             {webhookSyncing ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}
             <span>Sync Tagged Records to Webhook</span>
           </button>
-
-          <DateFilter value={dateFilter} onChange={setDateFilter} />
-
-          <div className="relative w-full sm:w-56">
-            <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search conversations..."
-              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
         </div>
       </div>
 
-      {/* Modern Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between shadow-2xs">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 font-heading">Filtered Conversations</p>
-            <h3 className="text-2xl font-bold font-heading text-slate-900 mt-1">{totalChats}</h3>
+      {/* Minimal Single Statistics Bar */}
+      <div className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-6 text-xs font-heading shadow-2xs">
+        <div className="flex items-center space-x-2">
+          <span className="text-slate-500 font-semibold">Filtered Conversations:</span>
+          <span className="font-bold text-slate-900 text-sm">{totalChats}</span>
+        </div>
+        <div className="hidden sm:block h-4 w-px bg-slate-200" />
+        <div className="flex items-center space-x-2">
+          <span className="text-slate-500 font-semibold">High Attention / Emergency:</span>
+          <span className="font-bold text-red-600 text-sm">{emergencyCount}</span>
+        </div>
+      </div>
+
+      {/* Date Filter & Search Controls Block (Placed After Statistics Bar) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <DateFilter value={dateFilter} onChange={setDateFilter} />
+
+          <div className="flex items-center space-x-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 font-heading shadow-2xs">
+            <span className="text-slate-500 font-semibold">Filter Tag:</span>
+            <select
+              value={selectedTagFilter}
+              onChange={(e) => setSelectedTagFilter(e.target.value)}
+              className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer"
+            >
+              <option value="all">All Tags ({availableTags.length})</option>
+              {availableTags.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
           </div>
-          <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-600">
-            <MessageSquare size={20} />
-          </div>
+
+          <button
+            onClick={() => setShowUntagged(!showUntagged)}
+            className={`py-2 px-3.5 border rounded-lg font-heading text-xs font-bold transition-colors flex items-center justify-center space-x-1.5 shadow-2xs cursor-pointer ${
+              showUntagged 
+                ? 'border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100' 
+                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+            }`}
+            title={showUntagged ? "Currently displaying all records (including untagged)" : "Currently hiding untagged records"}
+          >
+            <Tag size={13} className={showUntagged ? 'text-indigo-600' : 'text-slate-400'} />
+            <span>{showUntagged ? 'View: All Records' : 'View: Tagged Only'}</span>
+          </button>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between shadow-2xs">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 font-heading">High Attention / Emergency</p>
-            <h3 className="text-2xl font-bold font-heading text-red-600 mt-1">{emergencyCount}</h3>
-          </div>
-          <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center text-red-600">
-            <AlertTriangle size={20} />
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between shadow-2xs">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 font-heading">Unique Phone Contacts</p>
-            <h3 className="text-2xl font-bold font-heading text-emerald-600 mt-1">{uniquePhones}</h3>
-          </div>
-          <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600">
-            <Users size={20} />
-          </div>
+        <div className="relative w-full sm:w-64">
+          <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search conversations..."
+            className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
       </div>
 
@@ -567,8 +592,10 @@ export default function Dashboard() {
                       <td className="py-3.5 px-4 font-mono text-xs font-bold text-slate-700 whitespace-nowrap">
                         #{getConvoId(convo)}
                       </td>
-                      <td className="py-3.5 px-4 text-xs text-slate-500 whitespace-nowrap font-mono">
-                        {new Date(convo.created_at || convo.conversation_date).toLocaleDateString()}
+                      <td className="py-3.5 px-4 text-xs text-slate-600 whitespace-nowrap font-mono">
+                        {convo.conversation_date && convo.conversation_time
+                          ? `${convo.conversation_date} ${convo.conversation_time}`
+                          : (convo.created_at ? new Date(convo.created_at).toISOString().replace('T', ' ').slice(0, 19) : convo.conversation_date || '-')}
                       </td>
                       <td className="py-3.5 px-4 font-semibold text-slate-900 group-hover:text-emerald-600 transition-colors">
                         {convo.customer_name || 'Unknown'}
@@ -620,8 +647,10 @@ export default function Dashboard() {
                     <span className="font-bold text-slate-900 font-heading text-base">
                       {convo.customer_name || convo.company_name || 'Unknown Contact'}
                     </span>
-                    <span className="text-[11px] text-slate-400 font-mono">
-                      {new Date(convo.created_at || convo.conversation_date).toLocaleDateString()}
+                    <span className="text-[11px] text-slate-500 font-mono">
+                      {convo.conversation_date && convo.conversation_time
+                        ? `${convo.conversation_date} ${convo.conversation_time}`
+                        : (convo.conversation_date || '-')}
                     </span>
                   </div>
 
