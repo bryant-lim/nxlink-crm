@@ -96,6 +96,23 @@ export default function Dashboard() {
     setCurrentPage(1);
   }, [searchTerm, dateFilter]);
 
+  const getWebhookStatusMap = (): Record<string, { status: 'synced' | 'not_synced' | 'failed', error?: string, synced_at?: string }> => {
+    try {
+      const saved = localStorage.getItem('webhook_status_map_v1');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const saveWebhookStatusMap = (map: Record<string, any>) => {
+    try {
+      localStorage.setItem('webhook_status_map_v1', JSON.stringify(map));
+    } catch (err) {
+      console.error('Failed to save webhook status map', err);
+    }
+  };
+
   const fetchConversations = async () => {
     const { data, error } = await supabase
       .from('conversations')
@@ -103,7 +120,17 @@ export default function Dashboard() {
       .order('created_at', { ascending: false });
     
     if (!error && data) {
-      setConversations(data);
+      const statusMap = getWebhookStatusMap();
+      const mappedConvos = data.map(c => {
+        const entry = statusMap[c.id];
+        return {
+          ...c,
+          webhook_status: entry ? entry.status : 'synced',
+          webhook_error: entry ? entry.error : null,
+          webhook_synced_at: entry ? entry.synced_at : (c.conversation_date && c.conversation_time ? `${c.conversation_date} ${c.conversation_time}` : null)
+        };
+      });
+      setConversations(mappedConvos);
     }
     setLoading(false);
   };
@@ -128,15 +155,19 @@ export default function Dashboard() {
   const [webhookStatus, setWebhookStatus] = useState<string | null>(null);
 
   const pushToWebhook = async (convosToPush: Conversation[]) => {
-    const tagged = convosToPush.filter(c => shouldSyncToWebhook(c.conversation_tags));
-    if (tagged.length === 0) {
-      setWebhookStatus('⚠️ Skipped: Selected conversation does not meet Webhook sync criteria (Must be Hot Lead/Booking; excludes Emergency, Check Booking & Routing-only tags).');
+    const eligibleToSync = convosToPush.filter(c => 
+      shouldSyncToWebhook(c.conversation_tags) && c.webhook_status !== 'synced'
+    );
+
+    if (eligibleToSync.length === 0) {
+      setWebhookStatus('ℹ️ All eligible tagged records are already marked as Synced.');
       setTimeout(() => setWebhookStatus(null), 5000);
       return;
     }
 
     setWebhookSyncing(true);
-    setWebhookStatus(null);
+    setWebhookStatus(`Starting Webhook sync for ${eligibleToSync.length} unsynced/failed record(s)...`);
+
     let success = 0;
     let fail = 0;
 
@@ -144,7 +175,9 @@ export default function Dashboard() {
     const clientId = 'nxw_41ef8e4dee35cd8e4c6c1d3e';
     const clientSecret = '8ab7881cfcf9cd8428274ff2771875277c06be7404a3d4b20365bd584649ceea';
 
-    for (const c of tagged) {
+    const statusMap = getWebhookStatusMap();
+
+    for (const c of eligibleToSync) {
       const payload = {
         fields: {
           "Conversation ID": getConvoId(c),
@@ -184,12 +217,7 @@ export default function Dashboard() {
 
         if (resp.ok) {
           success++;
-          await supabase.from('conversations').update({
-            webhook_status: 'synced',
-            webhook_error: null,
-            webhook_synced_at: nowTs
-          }).eq('id', c.id);
-
+          statusMap[c.id] = { status: 'synced', synced_at: nowTs };
           c.webhook_status = 'synced';
           c.webhook_error = null;
           c.webhook_synced_at = nowTs;
@@ -203,12 +231,7 @@ export default function Dashboard() {
             errMsg = errText.slice(0, 120);
           }
 
-          await supabase.from('conversations').update({
-            webhook_status: 'failed',
-            webhook_error: errMsg,
-            webhook_synced_at: nowTs
-          }).eq('id', c.id);
-
+          statusMap[c.id] = { status: 'failed', error: errMsg, synced_at: nowTs };
           c.webhook_status = 'failed';
           c.webhook_error = errMsg;
           c.webhook_synced_at = nowTs;
@@ -216,17 +239,14 @@ export default function Dashboard() {
       } catch (err: any) {
         fail++;
         const errMsg = err.message || 'Network/CORS fetch error';
-        await supabase.from('conversations').update({
-          webhook_status: 'failed',
-          webhook_error: errMsg,
-          webhook_synced_at: nowTs
-        }).eq('id', c.id);
-
+        statusMap[c.id] = { status: 'failed', error: errMsg, synced_at: nowTs };
         c.webhook_status = 'failed';
         c.webhook_error = errMsg;
         c.webhook_synced_at = nowTs;
       }
     }
+
+    saveWebhookStatusMap(statusMap);
 
     const currentWebhookTs = getFormattedTimestamp();
     setLastWebhookSyncTime(currentWebhookTs);
@@ -234,7 +254,7 @@ export default function Dashboard() {
 
     setWebhookSyncing(false);
     if (fail === 0) {
-      setWebhookStatus(`✅ Webhook Sync Complete! Pushed ${success} tagged record(s).`);
+      setWebhookStatus(`✅ Webhook Sync Complete! Pushed ${success} record(s).`);
     } else {
       setWebhookStatus(`⚠️ Webhook Sync Complete: ${success} succeeded, ${fail} failed.`);
     }
@@ -281,11 +301,6 @@ export default function Dashboard() {
   const paginatedConvos = filtered.slice(startIndex, startIndex + itemsPerPage);
 
   const totalChats = filtered.length;
-  const emergencyCount = filtered.filter(c => {
-    const s = (c.customer_sentiment || '').toLowerCase();
-    const t = (c.conversation_tags || []).join(' ').toLowerCase();
-    return s.includes('emergency') || s.includes('negative') || t.includes('dh - emergency');
-  }).length;
 
   const [nxlinkSyncing, setNxlinkSyncing] = useState(false);
   const [autoSyncInterval, setAutoSyncInterval] = useState<'off' | '1' | '5' | '15' | '30'>('5');
@@ -450,11 +465,6 @@ export default function Dashboard() {
         <div className="flex items-center space-x-2">
           <span className="text-slate-500 font-semibold">Filtered Conversations:</span>
           <span className="font-bold text-slate-900 text-sm">{totalChats}</span>
-        </div>
-        <div className="hidden sm:block h-4 w-px bg-slate-200" />
-        <div className="flex items-center space-x-2">
-          <span className="text-slate-500 font-semibold">High Attention / Emergency:</span>
-          <span className="font-bold text-red-600 text-sm">{emergencyCount}</span>
         </div>
       </div>
 
