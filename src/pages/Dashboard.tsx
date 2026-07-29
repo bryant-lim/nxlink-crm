@@ -131,6 +131,23 @@ export default function Dashboard() {
         };
       });
       setConversations(mappedConvos);
+
+      // Initialize Last NXLINK Sync timestamp if empty
+      if (!localStorage.getItem('lastNxlinkSyncTime')) {
+        const latestRecord = mappedConvos[0];
+        const initialTs = (latestRecord && latestRecord.conversation_date && latestRecord.conversation_time)
+          ? `${latestRecord.conversation_date} ${latestRecord.conversation_time}`
+          : getFormattedTimestamp();
+        setLastNxlinkSyncTime(initialTs);
+        localStorage.setItem('lastNxlinkSyncTime', initialTs);
+      }
+
+      // Initialize Last Webhook Sync timestamp if empty
+      if (!localStorage.getItem('lastWebhookSyncTime')) {
+        const initialTs = getFormattedTimestamp();
+        setLastWebhookSyncTime(initialTs);
+        localStorage.setItem('lastWebhookSyncTime', initialTs);
+      }
     }
     setLoading(false);
   };
