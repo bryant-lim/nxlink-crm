@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import type { ConversationData } from '../lib/ticketing';
 import { normalizePhoneNumber } from '../lib/ticketing';
@@ -12,7 +11,12 @@ import {
   X, 
   ChevronRight,
   Activity,
-  UserCheck
+  UserCheck,
+  Volume2,
+  Download,
+  FileText,
+  MessageSquare,
+  ArrowRight
 } from 'lucide-react';
 
 interface ConsolidatedCustomer {
@@ -25,12 +29,20 @@ interface ConsolidatedCustomer {
   lastInteractionTime: string;
 }
 
+function getConvoId(c: ConversationData): string {
+  if (c.conversation_transcript) {
+    const match = c.conversation_transcript.match(/\[nxlink_id:(.*?)\]/);
+    if (match && match[1]) return match[1];
+  }
+  return c.id ? c.id.slice(0, 8) : 'N/A';
+}
+
 export default function Customers() {
   const [customers, setCustomers] = useState<ConsolidatedCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<ConsolidatedCustomer | null>(null);
-  const navigate = useNavigate();
+  const [selectedDetailConvo, setSelectedDetailConvo] = useState<ConversationData | null>(null);
 
   useEffect(() => {
     fetchAndConsolidateData();
@@ -127,7 +139,7 @@ export default function Customers() {
           </h1>
         </div>
 
-        {/* Text Filter Input (Requirement 9) */}
+        {/* Text Filter Input */}
         <div className="relative w-full md:w-80">
           <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
           <input
@@ -150,7 +162,7 @@ export default function Customers() {
           No customer accounts found matching your query.
         </div>
       ) : (
-        /* TABLE VIEW ONLY (Requirement 10) */
+        /* TABLE VIEW ONLY */
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -206,7 +218,7 @@ export default function Customers() {
 
       {/* Customer Detail Drawer */}
       {selectedCustomer && (
-        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-40 overflow-hidden bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
             <div className="w-screen max-w-2xl bg-white shadow-2xl flex flex-col">
               {/* Drawer Header */}
@@ -265,12 +277,14 @@ export default function Customers() {
                     {selectedCustomer.conversations.map((convo) => (
                       <div 
                         key={convo.id} 
-                        onClick={() => navigate('/', { state: { selectedConvoId: convo.id } })}
-                        className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 shadow-2xs hover:bg-slate-50 hover:border-emerald-300 transition-colors cursor-pointer group"
-                        title="Click to view conversation details in Dashboard"
+                        onClick={() => setSelectedDetailConvo(convo)}
+                        className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 shadow-2xs hover:bg-slate-50 hover:border-emerald-400 transition-all cursor-pointer group"
+                        title="Click to view full conversation details"
                       >
                         <div className="flex items-center justify-between text-xs">
-                          <span className="font-mono text-slate-400 font-bold group-hover:text-emerald-600 transition-colors">#{convo.id.slice(0, 8)}</span>
+                          <span className="font-mono text-slate-500 font-bold group-hover:text-emerald-600 transition-colors">
+                            #{getConvoId(convo)}
+                          </span>
                           <span className="font-mono text-slate-600 text-[11px]">
                             {convo.conversation_date && convo.conversation_time
                               ? `${convo.conversation_date} ${convo.conversation_time}`
@@ -284,16 +298,168 @@ export default function Customers() {
                           </p>
                         )}
 
-                        <div className="flex flex-wrap gap-1 pt-1">
-                          {convo.conversation_tags?.map((tag, idx) => (
-                            <span key={idx} className="px-2 py-0.5 bg-emerald-50 text-emerald-800 text-[11px] font-bold rounded border border-emerald-200 font-heading">
-                              {tag}
-                            </span>
-                          ))}
+                        <div className="flex items-center justify-between pt-1">
+                          <div className="flex flex-wrap gap-1">
+                            {convo.conversation_tags?.map((tag, idx) => (
+                              <span key={idx} className="px-2 py-0.5 bg-emerald-50 text-emerald-800 text-[11px] font-bold rounded border border-emerald-200 font-heading">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                          <span className="text-xs font-bold text-emerald-600 group-hover:translate-x-0.5 transition-transform flex items-center font-heading">
+                            View Details <ChevronRight size={14} className="ml-0.5" />
+                          </span>
                         </div>
                       </div>
                     ))}
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Direct Conversation Details Modal inside Customer Directory */}
+      {selectedDetailConvo && (
+        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+              <div>
+                <h3 className="text-base font-bold font-heading flex items-center">
+                  Conversation Details #{getConvoId(selectedDetailConvo)}
+                </h3>
+                <p className="text-xs text-slate-400 font-mono mt-0.5">
+                  {selectedDetailConvo.customer_name || 'Customer'} • {selectedDetailConvo.phone_number || ''}
+                  <span className="ml-2 font-mono text-emerald-400">
+                    {selectedDetailConvo.conversation_date && selectedDetailConvo.conversation_time
+                      ? `${selectedDetailConvo.conversation_date} ${selectedDetailConvo.conversation_time}`
+                      : (selectedDetailConvo.conversation_date || '')}
+                  </span>
+                </p>
+              </div>
+              <button 
+                onClick={() => setSelectedDetailConvo(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              {/* Metadata Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-heading mb-1">Company Name</h4>
+                  <p className="text-xs text-slate-800 font-semibold">{selectedDetailConvo.company_name || 'Individual / N/A'}</p>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-heading mb-1">Customer Sentiment</h4>
+                  <p className="text-xs text-slate-800 font-semibold">{selectedDetailConvo.customer_sentiment || 'Neutral'}</p>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-heading mb-1">Tags</h4>
+                  <div className="flex flex-wrap gap-1">
+                    {selectedDetailConvo.conversation_tags?.map((t, idx) => (
+                      <span key={idx} className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-heading text-[11px] font-bold rounded border border-emerald-200">
+                        {t}
+                      </span>
+                    )) || <span className="text-xs text-slate-400">No tags</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Next Steps */}
+              {selectedDetailConvo.next_steps && (
+                <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl space-y-1">
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
+                    <ArrowRight size={13} className="mr-1.5 text-emerald-600" /> Next Steps
+                  </h4>
+                  <p className="text-xs text-slate-700 font-medium">{selectedDetailConvo.next_steps}</p>
+                </div>
+              )}
+
+              {/* Audio MP3 Player */}
+              {selectedDetailConvo.call_audio_url && (
+                <div className="bg-emerald-50/70 border border-emerald-200 p-4 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-emerald-900 uppercase tracking-wider font-heading flex items-center">
+                      <Volume2 size={15} className="mr-1.5 text-emerald-600" /> Call Recording Audio
+                    </h4>
+                    <a 
+                      href={selectedDetailConvo.call_audio_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 underline flex items-center"
+                    >
+                      <Download size={13} className="mr-1" /> Download MP3
+                    </a>
+                  </div>
+                  <audio controls src={selectedDetailConvo.call_audio_url} className="w-full h-10 rounded-lg mt-1" />
+                </div>
+              )}
+
+              {/* Summary */}
+              <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-2 shadow-2xs">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
+                  <FileText size={14} className="mr-1.5 text-emerald-600" /> Full Conversation Summary
+                </h4>
+                <p className="text-xs text-slate-800 leading-relaxed whitespace-pre-wrap">{selectedDetailConvo.conversation_summary || 'No summary available.'}</p>
+              </div>
+
+              {/* AI Transcript Thread */}
+              <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-3 shadow-2xs">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
+                  <MessageSquare size={14} className="mr-1.5 text-emerald-600" /> AI Transcript Dialogue Thread
+                </h4>
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 max-h-80 overflow-y-auto space-y-2.5 font-sans text-xs">
+                  {selectedDetailConvo.conversation_transcript ? (
+                    selectedDetailConvo.conversation_transcript.split('\n').filter(Boolean).map((line, idx) => {
+                      if (line.includes('[nxlink_id:')) return null;
+                      if (line.startsWith('Customer Sentiment:') || line.startsWith('Conversation Summary:') || line.startsWith('Next Steps:')) return null;
+
+                      if (line.startsWith('[Customer]:')) {
+                        const speech = line.replace(/^\[Customer\]:\s*/, '').replace(/^"|"$/g, '');
+                        return (
+                          <div key={idx} className="p-2.5 rounded-lg bg-white border border-slate-200 mr-6 shadow-2xs">
+                            <span className="font-bold font-heading block mb-1 text-[10px] text-slate-600 flex items-center">
+                              👤 Customer Utterance
+                            </span>
+                            <span className="text-slate-800 leading-relaxed font-medium">{speech}</span>
+                          </div>
+                        );
+                      }
+
+                      if (line.startsWith('[Bot]:')) {
+                        const speech = line.replace(/^\[Bot\]:\s*/, '').replace(/^"|"$/g, '');
+                        return (
+                          <div key={idx} className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 ml-6 shadow-2xs">
+                            <span className="font-bold font-heading block mb-1 text-[10px] text-emerald-800 flex items-center">
+                              🤖 AI Agent Response
+                            </span>
+                            <span className="text-emerald-950 leading-relaxed font-medium">{speech}</span>
+                          </div>
+                        );
+                      }
+
+                      if (line.startsWith('[System]:')) {
+                        const step = line.replace(/^\[System\]:\s*/, '');
+                        return (
+                          <div key={idx} className="py-1 px-2.5 bg-slate-200/70 text-slate-700 text-[10px] font-mono font-medium rounded text-center my-1">
+                            ⚙️ {step}
+                          </div>
+                        );
+                      }
+
+                      return null;
+                    })
+                  ) : (
+                    <p className="text-slate-400 italic">No transcript recorded for this conversation.</p>
+                  )}
                 </div>
               </div>
             </div>
