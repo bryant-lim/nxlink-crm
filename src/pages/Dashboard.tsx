@@ -226,7 +226,7 @@ export default function Dashboard() {
           const errText = await resp.text().catch(() => '');
           let errMsg = `HTTP ${resp.status}: ${resp.statusText || 'Webhook error'}`;
           if (errText && errText.toLowerCase().includes('already')) {
-            errMsg = `Record with Conversation ID ${getConvoId(c)} already ingested in Lark Base`;
+            errMsg = `Record with Conversation ID ${getConvoId(c)} already ingested in Webhook destination`;
           } else if (errText) {
             errMsg = errText.slice(0, 120);
           }

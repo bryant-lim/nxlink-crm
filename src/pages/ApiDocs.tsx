@@ -43,7 +43,7 @@ export default function ApiDocs() {
           API & Webhook Documentation
         </h1>
         <p className="text-xs text-slate-500 font-heading mt-1">
-          Technical specifications for ingesting conversation data and exporting tagged records to 3rd-party webhooks (Lark Base).
+          Technical specifications for ingesting conversation data and exporting tagged records to 3rd-party webhooks.
         </p>
       </div>
 
@@ -96,7 +96,7 @@ export default function ApiDocs() {
       <section className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs space-y-5">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <h2 className="text-base font-bold font-heading text-slate-900 flex items-center">
-            <RefreshCw size={18} className="mr-2 text-emerald-600" /> 2. Sync Tagged Record to Webhook (Lark Base)
+            <RefreshCw size={18} className="mr-2 text-emerald-600" /> 2. Sync Tagged Record to Webhook
           </h2>
           <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-mono text-xs font-bold rounded border border-emerald-200">
             POST
@@ -104,7 +104,7 @@ export default function ApiDocs() {
         </div>
 
         <p className="text-xs text-slate-600 font-sans leading-relaxed">
-          Exports qualified lead records directly into 3rd-party systems (Lark Base Webhook). Executed manually via the <strong>Sync Tagged Records to Webhook</strong> button or triggered automatically.
+          Exports qualified lead records directly into 3rd-party systems. Executed manually via the <strong>Sync Tagged Records to Webhook</strong> button or triggered automatically.
         </p>
 
         {/* Endpoint & Headers */}
