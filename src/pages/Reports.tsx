@@ -104,11 +104,8 @@ export default function Reports() {
         <div>
           <h1 className="text-2xl font-bold font-heading text-slate-900 tracking-tight flex items-center">
             <TrendingUp size={24} className="mr-2 text-emerald-600" />
-            Tag Analytics & Word Cloud
+            Tag Analytics
           </h1>
-          <p className="text-sm text-slate-500 font-sans">
-            Visual frequency breakdown of conversation tags and customer interests.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -138,7 +135,7 @@ export default function Reports() {
           <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400 font-heading flex items-center">
-                <Sparkles size={14} className="mr-1.5 text-emerald-600" /> Interactive Tag Frequency Cloud
+                <Sparkles size={14} className="mr-1.5 text-emerald-600" /> Tags Cloud
               </span>
               <span className="text-xs text-slate-500 font-mono font-medium">
                 {displayedCloudItems.length} unique tags

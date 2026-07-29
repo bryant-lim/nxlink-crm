@@ -210,7 +210,6 @@ export default function Users() {
             <UsersIcon size={24} className="mr-2 text-emerald-600" />
             User Management
           </h1>
-          <p className="text-sm text-slate-500">Create, edit, and manage team member accounts, roles, and system display names.</p>
         </div>
 
         {currentUserRole === 'admin' && (

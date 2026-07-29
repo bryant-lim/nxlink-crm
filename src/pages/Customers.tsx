@@ -123,9 +123,6 @@ export default function Customers() {
             <UserCheck size={24} className="mr-2 text-emerald-600" />
             Customer Directory
           </h1>
-          <p className="text-sm text-slate-500 font-sans">
-            Consolidated profiles for synced contacts with recorded conversation tags.
-          </p>
         </div>
 
         {/* Text Filter Input (Requirement 9) */}
