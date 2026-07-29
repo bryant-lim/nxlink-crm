@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import type { Ticket } from '../lib/ticketing';
-import { calculateSLADeadlines, evaluateAutoTicketRules, getSLATimerStatus } from '../lib/ticketing';
 import DateFilter, { filterRecordsByDate } from '../components/DateFilter';
 import type { DateFilterValue } from '../components/DateFilter';
 import { 
@@ -12,12 +10,9 @@ import {
   FileText, 
   X,
   MessageSquare, 
-  TicketPlus, 
   CheckCircle2, 
   ArrowRight,
   Clock,
-  Ticket as TicketIcon,
-  AlertCircle,
   Volume2,
   Download,
   ChevronLeft,
@@ -26,7 +21,6 @@ import {
   Trash2,
   Tag
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 
 interface Conversation {
   id: string;
@@ -60,17 +54,8 @@ export default function Dashboard() {
   const [dateFilter, setDateFilter] = useState<DateFilterValue>({ preset: 'all' });
   const [selectedConvo, setSelectedConvo] = useState<Conversation | null>(null);
   
-  // Linked ticket & ticket creation states
-  const [linkedTicket, setLinkedTicket] = useState<Ticket | null>(null);
-  const [loadingTicket, setLoadingTicket] = useState(false);
-  const [ticketCreating, setTicketCreating] = useState(false);
-  const [ticketSuccess, setTicketSuccess] = useState<string | null>(null);
-  const [ticketError, setTicketError] = useState<string | null>(null);
-  
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
-
-  const navigate = useNavigate();
 
   useEffect(() => {
     fetchConversations();
@@ -81,14 +66,8 @@ export default function Dashboard() {
   }, [searchTerm, dateFilter]);
 
   useEffect(() => {
-    if (selectedConvo) {
-      checkLinkedTicket(selectedConvo.id);
-    } else {
-      setLinkedTicket(null);
-      setTicketSuccess(null);
-      setTicketError(null);
-    }
-  }, [selectedConvo]);
+    setCurrentPage(1);
+  }, [searchTerm, dateFilter]);
 
   const fetchConversations = async () => {
     const { data, error } = await supabase
@@ -100,78 +79,6 @@ export default function Dashboard() {
       setConversations(data);
     }
     setLoading(false);
-  };
-
-  const checkLinkedTicket = async (convoId: string) => {
-    setLoadingTicket(true);
-    setTicketError(null);
-    const { data, error } = await supabase
-      .from('tickets')
-      .select('*')
-      .eq('conversation_id', convoId)
-      .limit(1);
-
-    if (!error && data && data.length > 0) {
-      setLinkedTicket(data[0]);
-    } else {
-      setLinkedTicket(null);
-    }
-    setLoadingTicket(false);
-  };
-
-  const createTicketFromConvo = async (
-    priority: 'urgent' | 'high' | 'medium' | 'low' = 'medium',
-    category: string = 'Support'
-  ) => {
-    if (!selectedConvo) return;
-    setTicketCreating(true);
-    setTicketSuccess(null);
-    setTicketError(null);
-
-    try {
-      const { first_response_due_at, resolution_due_at } = calculateSLADeadlines(priority);
-      const titleText = `${category} - ${selectedConvo.customer_name || selectedConvo.company_name || 'Customer'}`;
-      
-      const { data, error } = await supabase
-        .from('tickets')
-        .insert([
-          {
-            conversation_id: selectedConvo.id,
-            customer_phone: selectedConvo.phone_number,
-            customer_name: selectedConvo.customer_name,
-            company_name: selectedConvo.company_name,
-            title: titleText,
-            description: selectedConvo.conversation_summary || 'Created from conversation dashboard.',
-            category: category,
-            priority: priority,
-            status: category === 'Sales-Follow Up' ? 'in_progress' : 'open',
-            assigned_to_role: category === 'Sales-Follow Up' ? 'sales' : 'support',
-            first_response_due_at,
-            resolution_due_at
-          }
-        ])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setLinkedTicket(data);
-      setTicketSuccess(`Ticket auto-created successfully! (${category} / ${priority.toUpperCase()} priority)`);
-    } catch (err: any) {
-      console.error('Ticket creation error:', err);
-      setTicketError(err.message || 'Failed to auto-create ticket.');
-    } finally {
-      setTicketCreating(false);
-    }
-  };
-
-  const autoCreateSmartTicket = () => {
-    if (!selectedConvo) return;
-    const { category, priority } = evaluateAutoTicketRules(
-      selectedConvo.conversation_tags || [],
-      selectedConvo.conversation_summary || ''
-    );
-    createTicketFromConvo(priority, category);
   };
 
   const shouldSyncToWebhook = (tags?: string[]) => {
@@ -762,127 +669,6 @@ export default function Dashboard() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-5 space-y-6">
-              {ticketSuccess && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-sm flex items-center space-x-2">
-                  <CheckCircle2 size={18} className="text-emerald-600" />
-                  <span>{ticketSuccess}</span>
-                </div>
-              )}
-
-              {ticketError && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg text-xs space-y-1">
-                  <div className="flex items-center font-bold font-heading space-x-1.5 text-red-900">
-                    <AlertCircle size={16} className="text-red-600" />
-                    <span>Database Action Required</span>
-                  </div>
-                  <p>{ticketError}</p>
-                </div>
-              )}
-
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-                {loadingTicket ? (
-                  <div className="flex items-center space-x-2 text-xs text-slate-500 font-heading">
-                    <Loader2 size={14} className="animate-spin text-emerald-600" />
-                    <span>Checking linked tickets...</span>
-                  </div>
-                ) : linkedTicket ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 font-heading flex items-center">
-                        <TicketIcon size={16} className="mr-1.5 text-emerald-600" />
-                        Ticket Linked & Active ({linkedTicket.category || 'Support'})
-                      </span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-heading uppercase ${
-                        linkedTicket.priority === 'urgent' ? 'bg-red-100 text-red-800' :
-                        linkedTicket.priority === 'high' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {linkedTicket.priority} Priority
-                      </span>
-                    </div>
-
-                    <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-bold text-sm text-slate-900 font-heading">{linkedTicket.title}</h4>
-                        <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded uppercase">
-                          {linkedTicket.status}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between text-xs text-slate-500 pt-1 border-t border-slate-100">
-                        <span className="flex items-center text-amber-700 font-semibold font-mono">
-                          <Clock size={12} className="mr-1" />
-                          SLA: {getSLATimerStatus(linkedTicket.resolution_due_at, linkedTicket.status === 'resolved').label}
-                        </span>
-                        <button
-                          onClick={() => {
-                            setSelectedConvo(null);
-                            navigate('/tickets');
-                          }}
-                          className="text-emerald-600 hover:text-emerald-700 font-bold font-heading flex items-center"
-                        >
-                          Manage Ticket <ArrowRight size={14} className="ml-1" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-700 font-heading flex items-center">
-                        <TicketPlus size={16} className="mr-2 text-emerald-600" />
-                        Create / Dispatch Ticket
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-slate-500">No ticket linked to this conversation yet. Auto-generate or select category:</p>
-
-                    <div className="flex flex-col gap-2">
-                      <button
-                        disabled={ticketCreating}
-                        onClick={autoCreateSmartTicket}
-                        className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-heading text-xs font-bold rounded-lg transition-colors flex items-center justify-center shadow-2xs cursor-pointer"
-                      >
-                        {ticketCreating ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}
-                        <span>Auto-Generate Smart Ticket (AI Priority & Category Detection)</span>
-                      </button>
-
-                      <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                        <button
-                          disabled={ticketCreating}
-                          onClick={() => createTicketFromConvo('high', 'Sales-Follow Up')}
-                          className="flex-1 py-2 px-3 bg-amber-500 hover:bg-amber-600 text-white font-heading text-xs font-bold rounded-lg transition-colors flex items-center justify-center shadow-2xs cursor-pointer"
-                        >
-                          <span>Sales-Follow Up (SLA 24h)</span>
-                        </button>
-                        <button
-                          disabled={ticketCreating}
-                          onClick={() => createTicketFromConvo('urgent', 'Emergency')}
-                          className="flex-1 py-2 px-3 bg-red-600 hover:bg-red-700 text-white font-heading text-xs font-bold rounded-lg transition-colors flex items-center justify-center shadow-2xs cursor-pointer"
-                        >
-                          <span>Urgent Emergency (SLA 4h)</span>
-                        </button>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <button
-                          disabled={ticketCreating}
-                          onClick={() => createTicketFromConvo('medium', 'Support')}
-                          className="flex-1 py-1.5 px-3 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 font-heading text-xs font-semibold rounded-lg transition-colors"
-                        >
-                          Support Ticket
-                        </button>
-                        <button
-                          disabled={ticketCreating}
-                          onClick={() => createTicketFromConvo('medium', 'Bug Report')}
-                          className="flex-1 py-1.5 px-3 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 font-heading text-xs font-semibold rounded-lg transition-colors"
-                        >
-                          Bug Report
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-white border border-slate-200 p-4 rounded-xl">

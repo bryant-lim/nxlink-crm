@@ -12,8 +12,6 @@ import {
   Loader2, 
   Menu, 
   X,
-  ChevronRight,
-  ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
   TrendingUp
@@ -23,7 +21,6 @@ export default function Layout() {
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [reportsSubMenuOpen, setReportsSubMenuOpen] = useState(true);
 
   const [userRole, setUserRole] = useState<'admin' | 'support' | 'sales'>('admin');
   const [displayName, setDisplayName] = useState<string>('Admin User');
@@ -96,8 +93,6 @@ export default function Layout() {
   }
 
   const isReportsActive = location.pathname.startsWith('/reports');
-  const currentSearch = new URLSearchParams(location.search);
-  const currentReportsTab = currentSearch.get('tab') || 'tickets';
 
   return (
     <div className="min-h-screen bg-[#fafafa] text-slate-900 flex flex-col md:flex-row font-sans">
@@ -112,15 +107,15 @@ export default function Layout() {
           {!isCollapsed && (
             <Link to="/" className="flex items-center space-x-3 group">
               <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white font-bold font-heading shadow-xs group-hover:bg-emerald-700 transition-colors">
-                AS
+                AMW
               </div>
-              <span className="text-base font-bold font-heading tracking-tight text-slate-900">ASimple CRM</span>
+              <span className="text-base font-bold font-heading tracking-tight text-slate-900">ASimple MW</span>
             </Link>
           )}
 
           {isCollapsed && (
             <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white font-bold font-heading shadow-xs">
-              AS
+              AMW
             </div>
           )}
 
@@ -152,22 +147,6 @@ export default function Layout() {
             </div>
           </Link>
 
-          {/* Tickets */}
-          <Link
-            to="/tickets"
-            className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'} py-2.5 rounded-lg text-sm font-medium transition-all ${
-              location.pathname === '/tickets' 
-                ? 'bg-slate-100 text-slate-900 font-semibold' 
-                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-            title={isCollapsed ? 'Tickets & SLAs' : ''}
-          >
-            <div className="flex items-center space-x-3">
-              <TicketIcon size={18} className={location.pathname === '/tickets' ? 'text-emerald-600' : 'text-slate-400'} />
-              {!isCollapsed && <span className="font-heading">Tickets & SLAs</span>}
-            </div>
-          </Link>
-
           {/* Customers */}
           <Link
             to="/customers"
@@ -184,59 +163,21 @@ export default function Layout() {
             </div>
           </Link>
 
-          {/* Reports & Analytics with Sub-Menu */}
-          <div>
-            <button
-              onClick={() => {
-                if (isCollapsed) setIsCollapsed(false);
-                setReportsSubMenuOpen(!reportsSubMenuOpen);
-                if (!isReportsActive) navigate('/reports?tab=tickets');
-              }}
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'} py-2.5 rounded-lg text-sm font-medium transition-all ${
-                isReportsActive 
-                  ? 'bg-slate-100 text-slate-900 font-semibold' 
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-              title={isCollapsed ? 'Report & Analytics' : ''}
-            >
-              <div className="flex items-center space-x-3">
-                <BarChart3 size={18} className={isReportsActive ? 'text-emerald-600' : 'text-slate-400'} />
-                {!isCollapsed && <span className="font-heading">Report & Analytics</span>}
-              </div>
-              {!isCollapsed && (
-                reportsSubMenuOpen ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />
-              )}
-            </button>
-
-            {/* Sub-menu items */}
-            {reportsSubMenuOpen && !isCollapsed && (
-              <div className="ml-7 mt-1 pl-2 border-l border-slate-200 space-y-1">
-                <Link
-                  to="/reports?tab=tickets"
-                  className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs font-heading font-medium transition-all ${
-                    isReportsActive && currentReportsTab === 'tickets'
-                      ? 'text-emerald-600 font-bold bg-emerald-50/50'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  <BarChart3 size={13} />
-                  <span>Case/Ticket Analytics</span>
-                </Link>
-
-                <Link
-                  to="/reports?tab=tags"
-                  className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs font-heading font-medium transition-all ${
-                    isReportsActive && currentReportsTab === 'tags'
-                      ? 'text-emerald-600 font-bold bg-emerald-50/50'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  <TrendingUp size={13} />
-                  <span>Tag Analytics</span>
-                </Link>
-              </div>
-            )}
-          </div>
+          {/* Tag Analytics / Reports */}
+          <Link
+            to="/reports"
+            className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'} py-2.5 rounded-lg text-sm font-medium transition-all ${
+              isReportsActive 
+                ? 'bg-slate-100 text-slate-900 font-semibold' 
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            }`}
+            title={isCollapsed ? 'Tag Analytics' : ''}
+          >
+            <div className="flex items-center space-x-3">
+              <TrendingUp size={18} className={isReportsActive ? 'text-emerald-600' : 'text-slate-400'} />
+              {!isCollapsed && <span className="font-heading">Tag Analytics</span>}
+            </div>
+          </Link>
 
           {/* User Management (Admin Only) */}
           {userRole === 'admin' && (
