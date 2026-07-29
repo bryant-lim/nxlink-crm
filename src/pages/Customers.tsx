@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import type { ConversationData } from '../lib/ticketing';
 import { normalizePhoneNumber } from '../lib/ticketing';
@@ -29,6 +30,7 @@ export default function Customers() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<ConsolidatedCustomer | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchAndConsolidateData();
@@ -255,16 +257,20 @@ export default function Customers() {
                   <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
                       <Activity size={14} className="mr-1.5 text-emerald-600" /> 
-                      Tagged Conversation History ({selectedCustomer.conversations.length})
+                      Conversation history
                     </h4>
                   </div>
 
                   <div className="space-y-3">
                     {selectedCustomer.conversations.map((convo) => (
-                      <div key={convo.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 shadow-2xs">
+                      <div 
+                        key={convo.id} 
+                        onClick={() => navigate('/', { state: { selectedConvoId: convo.id } })}
+                        className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 shadow-2xs hover:bg-slate-50 hover:border-emerald-300 transition-colors cursor-pointer group"
+                        title="Click to view conversation details in Dashboard"
+                      >
                         <div className="flex items-center justify-between text-xs">
-                          <span className="font-mono text-slate-400 font-bold">#{convo.id.slice(0, 8)}</span>
-                          {/* Requirement 12: Formatted Date & Time */}
+                          <span className="font-mono text-slate-400 font-bold group-hover:text-emerald-600 transition-colors">#{convo.id.slice(0, 8)}</span>
                           <span className="font-mono text-slate-600 text-[11px]">
                             {convo.conversation_date && convo.conversation_time
                               ? `${convo.conversation_date} ${convo.conversation_time}`

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import DateFilter, { filterRecordsByDate } from '../components/DateFilter';
 import type { DateFilterValue } from '../components/DateFilter';
@@ -53,6 +54,7 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilterValue>({ preset: 'all' });
   const [selectedConvo, setSelectedConvo] = useState<Conversation | null>(null);
+  const location = useLocation();
   
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
@@ -60,6 +62,14 @@ export default function Dashboard() {
   useEffect(() => {
     fetchConversations();
   }, []);
+
+  useEffect(() => {
+    if (conversations.length > 0 && location.state?.selectedConvoId) {
+      const targetId = location.state.selectedConvoId;
+      const match = conversations.find(c => c.id === targetId || getConvoId(c) === targetId);
+      if (match) setSelectedConvo(match);
+    }
+  }, [location.state, conversations]);
 
   useEffect(() => {
     setCurrentPage(1);
