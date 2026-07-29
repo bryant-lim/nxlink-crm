@@ -5,9 +5,6 @@ import { normalizePhoneNumber } from '../lib/ticketing';
 import { 
   Search, 
   Loader2, 
-  Phone, 
-  Mail, 
-  Building2, 
   X, 
   ChevronRight,
   Activity,
@@ -242,29 +239,23 @@ export default function Customers() {
 
               {/* Drawer Body */}
               <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                {/* Contact Info Card */}
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-heading">
-                  <div className="flex items-center space-x-2">
-                    <Phone size={16} className="text-emerald-600" />
+                {/* Customer Details Block */}
+                <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading">
+                    Customer Details
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-heading">
                     <div>
-                      <span className="text-slate-400 font-semibold block uppercase text-[10px]">Phone Number</span>
-                      <span className="font-bold text-slate-800 font-mono">{selectedCustomer.phone_number}</span>
+                      <span className="text-slate-400 font-semibold uppercase text-[10px] block">Customer Name</span>
+                      <span className="font-bold text-slate-900 text-sm">{selectedCustomer.customer_name || 'Unknown'}</span>
                     </div>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Mail size={16} className="text-emerald-600" />
                     <div>
-                      <span className="text-slate-400 font-semibold block uppercase text-[10px]">Email Address</span>
-                      <span className="font-bold text-slate-800">{selectedCustomer.email_address}</span>
+                      <span className="text-slate-400 font-semibold uppercase text-[10px] block">Phone Number</span>
+                      <span className="font-bold text-slate-800 font-mono">{selectedCustomer.phone_number || 'N/A'}</span>
                     </div>
-                  </div>
-
-                  <div className="flex items-center space-x-2 sm:col-span-2">
-                    <Building2 size={16} className="text-emerald-600" />
                     <div>
-                      <span className="text-slate-400 font-semibold block uppercase text-[10px]">Company Name</span>
-                      <span className="font-bold text-slate-800">{selectedCustomer.company_name}</span>
+                      <span className="text-slate-400 font-semibold uppercase text-[10px] block">Company Name</span>
+                      <span className="font-bold text-slate-800">{selectedCustomer.company_name || 'Individual / N/A'}</span>
                     </div>
                   </div>
                 </div>
@@ -384,10 +375,10 @@ export default function Customers() {
                 )}
               </div>
 
-              {/* Combined Contact Info Block (Customer Name, Phone, Company) */}
+              {/* Customer Details Block */}
               <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading">
-                  Contact & Organization Details
+                  Customer Details
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-heading">
                   <div>

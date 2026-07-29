@@ -720,10 +720,10 @@ export default function Dashboard() {
                   )}
                 </div>
 
-                {/* Combined Contact Info Block (Customer Name, Phone, Company) */}
+                {/* Customer Details Block (Customer Name, Phone, Company) */}
                 <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2">
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading">
-                    Contact & Organization Details
+                    Customer Details
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-heading">
                     <div>
