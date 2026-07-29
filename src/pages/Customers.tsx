@@ -381,23 +381,57 @@ export default function Customers() {
                 )}
               </div>
 
-              {/* Metadata Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-heading mb-1">Company Name</h4>
-                  <p className="text-xs text-slate-800 font-semibold">{selectedDetailConvo.company_name || 'Individual / N/A'}</p>
+              {/* Combined Contact Info Block (Customer Name, Phone, Company) */}
+              <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading">
+                  Contact & Organization Details
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-heading">
+                  <div>
+                    <span className="text-slate-400 font-semibold uppercase text-[10px] block">Customer Name</span>
+                    <span className="font-bold text-slate-900 text-sm">{selectedDetailConvo.customer_name || 'Unknown'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-semibold uppercase text-[10px] block">Phone Number</span>
+                    <span className="font-bold text-slate-800 font-mono">{selectedDetailConvo.phone_number || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-semibold uppercase text-[10px] block">Company Name</span>
+                    <span className="font-bold text-slate-800">{selectedDetailConvo.company_name || 'Individual / N/A'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Full Conversation Summary (Moved UP) */}
+              <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-2 shadow-2xs">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
+                  <FileText size={14} className="mr-1.5 text-emerald-600" /> Full Conversation Summary
+                </h4>
+                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{selectedDetailConvo.conversation_summary || 'No summary available.'}</p>
+              </div>
+
+              {/* Combined Block for Customer Sentiment & Next Steps */}
+              <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-3 shadow-2xs">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-heading mb-1">Customer Sentiment</h4>
+                    <span className="px-2.5 py-1 bg-slate-100 text-slate-800 font-bold rounded-lg border border-slate-200 font-heading inline-block">
+                      {selectedDetailConvo.customer_sentiment || 'Neutral'}
+                    </span>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-heading mb-1 flex items-center">
+                      <ArrowRight size={12} className="mr-1 text-emerald-600" /> Next Steps
+                    </h4>
+                    <p className="text-xs text-slate-700 font-medium leading-relaxed">{selectedDetailConvo.next_steps || 'None provided'}</p>
+                  </div>
                 </div>
 
-                <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-heading mb-1">Customer Sentiment</h4>
-                  <p className="text-xs text-slate-800 font-semibold">{selectedDetailConvo.customer_sentiment || 'Neutral'}</p>
-                </div>
-
-                <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-heading mb-1">Tags</h4>
-                  <div className="flex flex-wrap gap-1">
+                <div className="pt-2 border-t border-slate-100">
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-heading mb-1">Conversation Tags</h4>
+                  <div className="flex flex-wrap gap-1.5">
                     {selectedDetailConvo.conversation_tags?.map((t, idx) => (
-                      <span key={idx} className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-heading text-[11px] font-bold rounded border border-emerald-200">
+                      <span key={idx} className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 font-heading text-xs font-semibold rounded-md border border-emerald-200">
                         {t}
                       </span>
                     )) || <span className="text-xs text-slate-400">No tags</span>}
@@ -405,17 +439,7 @@ export default function Customers() {
                 </div>
               </div>
 
-              {/* Next Steps */}
-              {selectedDetailConvo.next_steps && (
-                <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl space-y-1">
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
-                    <ArrowRight size={13} className="mr-1.5 text-emerald-600" /> Next Steps
-                  </h4>
-                  <p className="text-xs text-slate-700 font-medium">{selectedDetailConvo.next_steps}</p>
-                </div>
-              )}
-
-              {/* Audio MP3 Player */}
+              {/* Call Audio MP3 Player */}
               {selectedDetailConvo.call_audio_url && (
                 <div className="bg-emerald-50/70 border border-emerald-200 p-4 rounded-xl space-y-2">
                   <div className="flex items-center justify-between">
@@ -428,20 +452,12 @@ export default function Customers() {
                       rel="noopener noreferrer" 
                       className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 underline flex items-center"
                     >
-                      <Download size={13} className="mr-1" /> Download MP3
+                      <Download size={13} className="mr-1" /> Open / Download MP3
                     </a>
                   </div>
                   <audio controls src={selectedDetailConvo.call_audio_url} className="w-full h-10 rounded-lg mt-1" />
                 </div>
               )}
-
-              {/* Summary */}
-              <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-2 shadow-2xs">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
-                  <FileText size={14} className="mr-1.5 text-emerald-600" /> Full Conversation Summary
-                </h4>
-                <p className="text-xs text-slate-800 leading-relaxed whitespace-pre-wrap">{selectedDetailConvo.conversation_summary || 'No summary available.'}</p>
-              </div>
 
               {/* AI Transcript Thread */}
               <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-3 shadow-2xs">

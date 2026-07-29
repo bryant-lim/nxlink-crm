@@ -543,7 +543,6 @@ export default function Dashboard() {
                     <th className="py-3 px-4">Phone</th>
                     <th className="py-3 px-4">Tags</th>
                     <th className="py-3 px-4">Webhook Sync</th>
-                    <th className="py-3 px-4">Summary</th>
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -613,9 +612,6 @@ export default function Dashboard() {
                             <MinusCircle size={12} className="mr-1 text-slate-400" /> Not Synced
                           </span>
                         )}
-                      </td>
-                      <td className="py-3.5 px-4 text-xs text-slate-500 max-w-xs truncate">
-                        {convo.conversation_summary || '-'}
                       </td>
                       <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <button
@@ -721,32 +717,62 @@ export default function Dashboard() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="bg-white border border-slate-200 p-4 rounded-xl">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading mb-2">Company Name</h4>
-                    <p className="text-sm text-slate-800 font-medium">{selectedConvo.company_name || 'Individual / N/A'}</p>
+                {/* Combined Contact Info Block (Customer Name, Phone, Company) */}
+                <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading">
+                    Contact & Organization Details
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-heading">
+                    <div>
+                      <span className="text-slate-400 font-semibold uppercase text-[10px] block">Customer Name</span>
+                      <span className="font-bold text-slate-900 text-sm">{selectedConvo.customer_name || 'Unknown'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold uppercase text-[10px] block">Phone Number</span>
+                      <span className="font-bold text-slate-800 font-mono">{selectedConvo.phone_number || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold uppercase text-[10px] block">Company Name</span>
+                      <span className="font-bold text-slate-800">{selectedConvo.company_name || 'Individual / N/A'}</span>
+                    </div>
                   </div>
-                  <div className="bg-white border border-slate-200 p-4 rounded-xl">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading mb-2">Customer Sentiment</h4>
-                    <p className="text-sm text-slate-800 font-medium">{selectedConvo.customer_sentiment || 'Neutral'}</p>
+                </div>
+
+                {/* Full Conversation Summary (Moved UP) */}
+                <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-2 shadow-2xs">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
+                    <FileText size={14} className="mr-1.5 text-emerald-600" /> Full Conversation Summary
+                  </h4>
+                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{selectedConvo.conversation_summary || 'No summary available.'}</p>
+                </div>
+
+                {/* Combined Block for Customer Sentiment & Next Steps */}
+                <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-3 shadow-2xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-heading mb-1">Customer Sentiment</h4>
+                      <span className="px-2.5 py-1 bg-slate-100 text-slate-800 font-bold rounded-lg border border-slate-200 font-heading inline-block">
+                        {selectedConvo.customer_sentiment || 'Neutral'}
+                      </span>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-heading mb-1 flex items-center">
+                        <ArrowRight size={12} className="mr-1 text-emerald-600" /> Next Steps
+                      </h4>
+                      <p className="text-xs text-slate-700 font-medium leading-relaxed">{selectedConvo.next_steps || 'None provided'}</p>
+                    </div>
                   </div>
-                  <div className="bg-white border border-slate-200 p-4 rounded-xl">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading mb-2">Tags</h4>
-                    <div className="flex flex-wrap gap-1">
+
+                  <div className="pt-2 border-t border-slate-100">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-heading mb-1">Conversation Tags</h4>
+                    <div className="flex flex-wrap gap-1.5">
                       {selectedConvo.conversation_tags?.map((t, idx) => (
-                        <span key={idx} className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-heading text-xs font-medium rounded border border-emerald-200">
+                        <span key={idx} className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 font-heading text-xs font-semibold rounded-md border border-emerald-200">
                           {t}
                         </span>
                       )) || <span className="text-xs text-slate-400">No tags</span>}
                     </div>
                   </div>
-                </div>
-
-                <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-2">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading flex items-center">
-                    <ArrowRight size={14} className="mr-1.5 text-emerald-600" /> Next Steps
-                  </h4>
-                  <p className="text-sm text-slate-700">{selectedConvo.next_steps || 'None provided'}</p>
                 </div>
 
                 {selectedConvo.call_audio_url && (
