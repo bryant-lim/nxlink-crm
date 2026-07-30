@@ -1,4 +1,4 @@
-import { Handler } from '@netlify/functions';
+import { Handler, schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import WebSocket from 'ws';
 
@@ -74,7 +74,7 @@ function shouldSyncToWebhook(tags: any[]) {
   return lowerTags.some(t => t.includes('hot lead') || t.includes('booking appointment'));
 }
 
-export const handler: Handler = async () => {
+const syncNxlinkHandler: Handler = async () => {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
@@ -257,3 +257,5 @@ export const handler: Handler = async () => {
     };
   }
 };
+
+export const handler = schedule('*/5 * * * *', syncNxlinkHandler);
