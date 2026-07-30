@@ -9,6 +9,28 @@ function extractSummaryMetadata(messages: any[], conv: any) {
   let extractedName: string | null = null;
   let extractedPhone: string | null = null;
 
+  const parseSummaryText = (text: string) => {
+    if (!text) return;
+    const sMatch = text.match(/Customer Sentiment:\s*(.*?)(?=\s*Conversation Summary:|$)/i);
+    if (sMatch && !sentiment) sentiment = sMatch[1].trim();
+
+    const sumMatch = text.match(/Conversation Summary:\s*(.*?)(?=\s*Next Steps:|$)/i);
+    if (sumMatch && !summary) summary = sumMatch[1].trim();
+
+    const nsMatch = text.match(/Next Steps:\s*(.*?)(?=\s*Customer Name:|$)/i);
+    if (nsMatch && !nextSteps) nextSteps = nsMatch[1].trim();
+
+    const nMatch = text.match(/Customer Name:\s*(.*?)(?=\s*Phone Number:|$)/i);
+    if (nMatch && nMatch[1].trim() && nMatch[1].trim().toLowerCase() !== 'n/a' && !extractedName) {
+      extractedName = nMatch[1].trim();
+    }
+
+    const pMatch = text.match(/Phone Number:\s*(.*)/i);
+    if (pMatch && pMatch[1].trim() && pMatch[1].trim().toLowerCase() !== 'n/a' && !extractedPhone) {
+      extractedPhone = pMatch[1].trim();
+    }
+  };
+
   if (Array.isArray(messages)) {
     for (const m of messages) {
       if (m && m.msgType === 64 && m.msgInfo) {
@@ -22,40 +44,31 @@ function extractSummaryMetadata(messages: any[], conv: any) {
         } catch (e) {}
 
         if (parsed && parsed.summarize) {
-          const text = parsed.summarize;
-
-          const sMatch = text.match(/Customer Sentiment:\s*(.*?)(?=\s*Conversation Summary:|$)/i);
-          if (sMatch) sentiment = sMatch[1].trim();
-
-          const sumMatch = text.match(/Conversation Summary:\s*(.*?)(?=\s*Next Steps:|$)/i);
-          if (sumMatch) summary = sumMatch[1].trim();
-
-          const nsMatch = text.match(/Next Steps:\s*(.*?)(?=\s*Customer Name:|$)/i);
-          if (nsMatch) nextSteps = nsMatch[1].trim();
-
-          const nMatch = text.match(/Customer Name:\s*(.*?)(?=\s*Phone Number:|$)/i);
-          if (nMatch && nMatch[1].trim() && nMatch[1].trim().toLowerCase() !== 'n/a') {
-            extractedName = nMatch[1].trim();
-          }
-
-          const pMatch = text.match(/Phone Number:\s*(.*)/i);
-          if (pMatch && pMatch[1].trim() && pMatch[1].trim().toLowerCase() !== 'n/a') {
-            extractedPhone = pMatch[1].trim();
-          }
+          parseSummaryText(parsed.summarize);
         }
       }
     }
   }
 
+  if (conv.conv_summary) parseSummaryText(conv.conv_summary);
+  if (conv.summary) parseSummaryText(conv.summary);
+
+  const cleanField = (val: string | null) => {
+    if (!val) return null;
+    let s = val.split(/\[nxlink_id:/i)[0].trim();
+    s = s.replace(/Customer Name:.*$/is, '').replace(/Phone Number:.*$/is, '').replace(/["}'\\\}\],]+$/g, '').trim();
+    return s.length > 0 ? s : null;
+  };
+
   const finalName = extractedName || conv.customer_name || conv.customerName || null;
   const finalPhone = extractedPhone || conv.customer_phone || conv.phone || null;
 
   return {
-    customer_sentiment: sentiment,
-    conversation_summary: summary,
-    next_steps: nextSteps,
-    customer_name: finalName,
-    phone_number: finalPhone
+    customer_sentiment: cleanField(sentiment),
+    conversation_summary: cleanField(summary),
+    next_steps: cleanField(nextSteps),
+    customer_name: cleanField(finalName),
+    phone_number: cleanField(finalPhone)
   };
 }
 
@@ -121,15 +134,49 @@ const syncNxlinkHandler: Handler = async () => {
       token = 'eyJhbGciOiJIUzI1NiJ9.eyJ1SWQiOjUzMjc3LCJkZXZpY2VVbmlxdWVJZGVudGlmaWNhdGlvbiI6IjIyMmJkNjQwLTg5NjAtMTFmMS1hMGEzLWUxYTIyNTg1YTY0MSIsInV1SWQiOiI2YTZhOTQxMGU0YjA5OTU4MmFhY2JjOWEifQ.zQ-WHvsnm_5cyIQKCiTacukA7ZVPETinsDgjALM0OBI';
     }
 
-    const convResp = await fetch('https://app.nxlink.ai/admin/nx_flow_manager/conversation', {
-      method: 'POST',
-      headers: { 'authorization': token, 'content-type': 'application/json' },
-      body: JSON.stringify({ phone: null, tags: [], page_number: 1, page_size: 100, timeZone: 'UTC+08:00' })
-    });
+    let conversations: any[] = [];
+    let consecutiveAlreadySyncedPages = 0;
+    const maxPagesToScan = 15; // Scan up to 15 pages (1500 records) per run
 
-    if (!convResp.ok) throw new Error(`HTTP ${convResp.status} from app.nxlink.ai`);
-    const convData = await convResp.json();
-    const conversations = convData.list || convData.data?.list || convData.data || [];
+    for (let pageNum = 1; pageNum <= maxPagesToScan; pageNum++) {
+      const convResp = await fetch('https://app.nxlink.ai/admin/nx_flow_manager/conversation', {
+        method: 'POST',
+        headers: { 'authorization': token, 'content-type': 'application/json' },
+        body: JSON.stringify({ phone: null, tags: [], page_number: pageNum, page_size: 100, timeZone: 'UTC+08:00' })
+      });
+
+      if (!convResp.ok) break;
+      const convData = await convResp.json();
+      const pageList = convData.list || convData.data?.list || convData.data || [];
+      if (!Array.isArray(pageList) || pageList.length === 0) break;
+
+      conversations.push(...pageList);
+
+      const dhRecords = pageList.filter((c: any) => (c.auto_flow_name || c.autoFlowName || '').toLowerCase().includes('dentalhome'));
+      if (dhRecords.length > 0) {
+        let unSyncedCount = 0;
+        for (const c of dhRecords) {
+          const cid = c.id || c.conversationId || c.uuid;
+          if (!cid) continue;
+          const { data: existing } = await supabase
+            .from('conversations')
+            .select('id')
+            .ilike('conversation_transcript', `%nxlink_id:${cid}%`)
+            .limit(1);
+          if (!existing || existing.length === 0) {
+            unSyncedCount++;
+          }
+        }
+        if (unSyncedCount === 0) {
+          consecutiveAlreadySyncedPages++;
+          if (consecutiveAlreadySyncedPages >= 2) break;
+        } else {
+          consecutiveAlreadySyncedPages = 0;
+        }
+      }
+
+      if (pageList.length < 100) break;
+    }
 
     let syncedCount = 0;
     let webhookPushedCount = 0;

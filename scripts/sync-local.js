@@ -195,7 +195,7 @@ async function main() {
   console.log('\n📥 Querying NXLINK AI Conversations API (Scanning Pages for DentalHome_V2)...');
   let conversations = [];
 
-  for (let pageNum = 1; pageNum <= 3; pageNum++) {
+  for (let pageNum = 1; pageNum <= 10; pageNum++) {
     console.log(`   Fetching Page ${pageNum} (100 conversations)...`);
     const convResp = await fetch('https://app.nxlink.ai/admin/nx_flow_manager/conversation', {
       method: 'POST',
