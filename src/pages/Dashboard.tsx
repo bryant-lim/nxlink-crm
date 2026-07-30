@@ -123,11 +123,13 @@ export default function Dashboard() {
       const statusMap = getWebhookStatusMap();
       const mappedConvos = data.map(c => {
         const entry = statusMap[c.id];
+        const isEligible = shouldSyncToWebhook(c.conversation_tags);
+        const defaultStatus = isEligible ? 'not_synced' : 'synced';
         return {
           ...c,
-          webhook_status: entry ? entry.status : 'synced',
+          webhook_status: entry ? entry.status : defaultStatus,
           webhook_error: entry ? entry.error : null,
-          webhook_synced_at: entry ? entry.synced_at : (c.conversation_date && c.conversation_time ? `${c.conversation_date} ${c.conversation_time}` : null)
+          webhook_synced_at: entry ? (entry.synced_at || null) : (defaultStatus === 'synced' ? `${c.conversation_date || ''} ${c.conversation_time || ''}`.trim() : null)
         };
       });
       setConversations(mappedConvos);
@@ -286,9 +288,9 @@ export default function Dashboard() {
   ).sort();
 
   const sorted = [...conversations].sort((a, b) => {
-    const timeA = new Date(a.created_at || a.conversation_date).getTime();
-    const timeB = new Date(b.created_at || b.conversation_date).getTime();
-    return timeB - timeA;
+    const dateTimeA = `${a.conversation_date || ''} ${a.conversation_time || ''}`.trim() || a.created_at || '';
+    const dateTimeB = `${b.conversation_date || ''} ${b.conversation_time || ''}`.trim() || b.created_at || '';
+    return dateTimeB.localeCompare(dateTimeA);
   });
 
   const dateFiltered = filterRecordsByDate(sorted, c => c.created_at || c.conversation_date, dateFilter);

@@ -190,18 +190,15 @@ const syncNxlinkHandler: Handler = async () => {
 
       const { data: existing } = await supabase
         .from('conversations')
-        .select('id')
+        .select('id, customer_name, conversation_summary')
         .ilike('conversation_transcript', `%nxlink_id:${convId}%`)
         .limit(1);
-
-      if (existing && existing.length > 0) continue;
 
       const msgResp = await fetch(`https://app.nxlink.ai/admin/nx_flow_manager/conversation/messages?pageSize=9999&pageNumber=1&conversationId=${convId}`, {
         headers: { 'authorization': token }
       });
-      if (!msgResp.ok) continue;
 
-      const msgData = await msgResp.json();
+      const msgData = msgResp.ok ? await msgResp.json() : {};
       const messages = msgData.data || msgData.list || [];
       const meta = extractSummaryMetadata(messages, conv);
 
@@ -230,62 +227,77 @@ const syncNxlinkHandler: Handler = async () => {
         const tsMs = typeof rawTs === 'number' ? (rawTs > 10000000000 ? rawTs : rawTs * 1000) : new Date(rawTs).getTime();
         if (!isNaN(tsMs)) dateObj = new Date(tsMs);
       }
-      const year = dateObj.getFullYear();
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const day = String(dateObj.getDate()).padStart(2, '0');
-      const hours = String(dateObj.getHours()).padStart(2, '0');
-      const minutes = String(dateObj.getMinutes()).padStart(2, '0');
-      const seconds = String(dateObj.getSeconds()).padStart(2, '0');
-      const cDateStr = `${year}-${month}-${day}`;
-      const cTimeStr = `${hours}:${minutes}:${seconds}`;
+      const cDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit' }).format(dateObj);
+      const cTimeStr = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(dateObj);
 
-      const { error } = await supabase.from('conversations').insert([{
-        customer_name: meta.customer_name,
-        phone_number: meta.phone_number,
-        customer_sentiment: meta.customer_sentiment,
-        conversation_summary: meta.conversation_summary,
-        next_steps: meta.next_steps,
-        company_name: conv.company_name || null,
-        email_address: conv.email_address || null,
-        conversation_tags: tagsList,
-        conversation_date: cDateStr,
-        conversation_time: cTimeStr,
-        conversation_transcript: rawTranscript,
-        call_audio_url: callAudioUrl
-      }]);
+      let wasIngestedOrUpdated = false;
 
-      if (!error) {
-        syncedCount++;
+      if (existing && existing.length > 0) {
+        const row = existing[0];
+        if (!row.customer_name || !row.conversation_summary) {
+          await supabase.from('conversations').update({
+            customer_name: meta.customer_name,
+            phone_number: meta.phone_number,
+            customer_sentiment: meta.customer_sentiment,
+            conversation_summary: meta.conversation_summary,
+            next_steps: meta.next_steps,
+            conversation_tags: tagsList,
+            conversation_date: cDateStr,
+            conversation_time: cTimeStr,
+            call_audio_url: callAudioUrl
+          }).eq('id', row.id);
+          wasIngestedOrUpdated = true;
+        }
+      } else {
+        const { error } = await supabase.from('conversations').insert([{
+          customer_name: meta.customer_name,
+          phone_number: meta.phone_number,
+          customer_sentiment: meta.customer_sentiment,
+          conversation_summary: meta.conversation_summary,
+          next_steps: meta.next_steps,
+          company_name: conv.company_name || null,
+          email_address: conv.email_address || null,
+          conversation_tags: tagsList,
+          conversation_date: cDateStr,
+          conversation_time: cTimeStr,
+          conversation_transcript: rawTranscript,
+          call_audio_url: callAudioUrl
+        }]);
 
-        if (shouldSyncToWebhook(tagsList)) {
-          const webhookUrl = process.env.NXLINK_WEBHOOK_URL || 'https://asia-east1-lark-demo-67aa3.cloudfunctions.net/nxlinkWebhook';
-          const clientId = process.env.NXLINK_WEBHOOK_CLIENT_ID || 'nxw_41ef8e4dee35cd8e4c6c1d3e';
-          const clientSecret = process.env.NXLINK_WEBHOOK_CLIENT_SECRET || '8ab7881cfcf9cd8428274ff2771875277c06be7404a3d4b20365bd584649ceea';
+        if (!error) {
+          syncedCount++;
+          wasIngestedOrUpdated = true;
+        }
+      }
 
-          if (webhookUrl && clientId && clientSecret) {
-            try {
-              await fetch(webhookUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'client_id': clientId, 'client_secret': clientSecret },
-                body: JSON.stringify({
-                  fields: {
-                    "Conversation ID": String(convId),
-                    "Customer Name": meta.customer_name || 'Unknown',
-                    "Phone Number": meta.phone_number || 'Not Provided',
-                    "Company Name": conv.company_name || null,
-                    "Email Address": conv.email_address || null,
-                    "Tags": tagsList,
-                    "Full Summary": meta.conversation_summary || null,
-                    "Sentiment": meta.customer_sentiment || 'Neutral',
-                    "Next Steps": meta.next_steps || null,
-                    "Call Audio URL": callAudioUrl,
-                    "Conversation Date": new Date().toISOString().split('T')[0]
-                  }
-                })
-              });
-              webhookPushedCount++;
-            } catch (e) {}
-          }
+      if (wasIngestedOrUpdated && shouldSyncToWebhook(tagsList)) {
+        const webhookUrl = process.env.NXLINK_WEBHOOK_URL || 'https://asia-east1-lark-demo-67aa3.cloudfunctions.net/nxlinkWebhook';
+        const clientId = process.env.NXLINK_WEBHOOK_CLIENT_ID || 'nxw_41ef8e4dee35cd8e4c6c1d3e';
+        const clientSecret = process.env.NXLINK_WEBHOOK_CLIENT_SECRET || '8ab7881cfcf9cd8428274ff2771875277c06be7404a3d4b20365bd584649ceea';
+
+        if (webhookUrl && clientId && clientSecret) {
+          try {
+            await fetch(webhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'client_id': clientId, 'client_secret': clientSecret },
+              body: JSON.stringify({
+                fields: {
+                  "Conversation ID": String(convId),
+                  "Customer Name": meta.customer_name || 'Unknown',
+                  "Phone Number": meta.phone_number || 'Not Provided',
+                  "Company Name": conv.company_name || null,
+                  "Email Address": conv.email_address || null,
+                  "Tags": tagsList,
+                  "Full Summary": meta.conversation_summary || null,
+                  "Sentiment": meta.customer_sentiment || 'Neutral',
+                  "Next Steps": meta.next_steps || null,
+                  "Call Audio URL": callAudioUrl,
+                  "Conversation Date": cDateStr
+                }
+              })
+            });
+            webhookPushedCount++;
+          } catch (e) {}
         }
       }
     }
