@@ -84,7 +84,7 @@ function shouldSyncToWebhook(tags: any[]) {
   );
   if (hasEmergencyOrCheckBooking) return false;
 
-  return lowerTags.some(t => t.includes('hot lead') || t.includes('booking appointment'));
+  return lowerTags.some(t => t.includes('hot lead') || t.includes('warm lead') || t.includes('booking appointment'));
 }
 
 const syncNxlinkHandler: Handler = async () => {

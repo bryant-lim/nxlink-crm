@@ -209,7 +209,7 @@ function netlifyFunctionsDevPlugin(): Plugin {
                 const routingOnly = ['to agent', 'branch agent', 'contact agent'];
                 const isOnlyRouting = lowerTags.every(t => routingOnly.includes(t));
                 const hasEmergency = lowerTags.some(t => t.includes('emergency') || t.includes('check booking'));
-                const shouldPush = !isOnlyRouting && !hasEmergency && lowerTags.some(t => t.includes('hot lead') || t.includes('booking appointment'));
+                const shouldPush = !isOnlyRouting && !hasEmergency && lowerTags.some(t => t.includes('hot lead') || t.includes('warm lead') || t.includes('booking appointment'));
 
                 if (shouldPush) {
                   const webhookUrl = process.env.NXLINK_WEBHOOK_URL || 'https://asia-east1-lark-demo-67aa3.cloudfunctions.net/nxlinkWebhook';
@@ -241,7 +241,6 @@ function netlifyFunctionsDevPlugin(): Plugin {
                   } catch (e) {}
                 }
               }
-            }
 
             console.log(`[Dev Sync] ✅ Sync Finished: ${syncedCount} inserted, ${webhookCount} pushed to webhook.`);
 
