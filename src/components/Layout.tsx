@@ -3,9 +3,7 @@ import { Outlet, useNavigate, Link, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { 
   LayoutDashboard, 
-  Ticket as TicketIcon, 
   Users as UsersIcon, 
-  BarChart3, 
   UserCog, 
   Code, 
   LogOut, 
@@ -14,7 +12,8 @@ import {
   X,
   PanelLeftClose,
   PanelLeftOpen,
-  TrendingUp
+  TrendingUp,
+  Database
 } from 'lucide-react';
 
 export default function Layout() {
@@ -105,18 +104,9 @@ export default function Layout() {
         {/* Brand Header */}
         <div className={`h-16 flex items-center justify-between px-4 border-b border-slate-100 ${isCollapsed ? 'justify-center' : ''}`}>
           {!isCollapsed && (
-            <Link to="/" className="flex items-center space-x-3 group">
-              <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white font-bold font-heading shadow-xs group-hover:bg-emerald-700 transition-colors">
-                AMW
-              </div>
+            <Link to="/" className="flex items-center group">
               <span className="text-base font-bold font-heading tracking-tight text-slate-900">ASimple MW</span>
             </Link>
-          )}
-
-          {isCollapsed && (
-            <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white font-bold font-heading shadow-xs">
-              AMW
-            </div>
           )}
 
           {/* Minimize / Expand Toggle */}
@@ -212,6 +202,22 @@ export default function Layout() {
               {!isCollapsed && <span className="font-heading">API Integration</span>}
             </div>
           </Link>
+
+          {/* Database Metrics */}
+          <Link
+            to="/db-metrics"
+            className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'} py-2.5 rounded-lg text-sm font-medium transition-all ${
+              location.pathname === '/db-metrics' 
+                ? 'bg-slate-100 text-slate-900 font-semibold' 
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            }`}
+            title={isCollapsed ? 'Database Metrics' : ''}
+          >
+            <div className="flex items-center space-x-3">
+              <Database size={18} className={location.pathname === '/db-metrics' ? 'text-emerald-600' : 'text-slate-400'} />
+              {!isCollapsed && <span className="font-heading">Database Metrics</span>}
+            </div>
+          </Link>
         </nav>
 
         {/* User Profile & Sign Out */}
@@ -250,10 +256,7 @@ export default function Layout() {
 
       {/* Mobile Top Header */}
       <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sticky top-0 z-40 md:hidden">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white font-bold font-heading text-sm">
-            AS
-          </div>
+        <div className="flex items-center">
           <div>
             <span className="text-base font-bold font-heading tracking-tight text-slate-900 block leading-tight">ASimple CRM</span>
             <span className="text-[10px] text-slate-400 font-mono">{displayName} ({userRole})</span>
@@ -276,11 +279,7 @@ export default function Layout() {
           <div className="bg-white border-b border-slate-200 p-4 space-y-2 animate-in slide-in-from-top-2 duration-150">
             <Link to="/" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50">
               <LayoutDashboard size={20} className="text-slate-400" />
-              <span className="font-heading">Dashboard</span>
-            </Link>
-            <Link to="/tickets" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50">
-              <TicketIcon size={20} className="text-slate-400" />
-              <span className="font-heading">Tickets & SLAs</span>
+              <span className="font-heading">Conversation</span>
             </Link>
             <Link to="/customers" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50">
               <UsersIcon size={20} className="text-slate-400" />
@@ -289,11 +288,7 @@ export default function Layout() {
 
             <div className="space-y-1 pl-4 border-l-2 border-slate-200 py-1">
               <span className="text-xs font-bold text-slate-400 font-heading uppercase">Report & Analytics</span>
-              <Link to="/reports?tab=tickets" className="flex items-center space-x-2 py-2 text-xs font-heading font-medium text-slate-700">
-                <BarChart3 size={14} className="text-emerald-600" />
-                <span>Case/Ticket Analytics</span>
-              </Link>
-              <Link to="/reports?tab=tags" className="flex items-center space-x-2 py-2 text-xs font-heading font-medium text-slate-700">
+              <Link to="/reports" className="flex items-center space-x-2 py-2 text-xs font-heading font-medium text-slate-700">
                 <TrendingUp size={14} className="text-emerald-600" />
                 <span>Tag Analytics</span>
               </Link>
@@ -330,15 +325,15 @@ export default function Layout() {
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 py-2 px-3 flex justify-around items-center z-30 shadow-lg">
         <Link to="/" className="flex flex-col items-center py-1 px-3 rounded-lg text-slate-600">
           <LayoutDashboard size={18} />
-          <span className="text-[10px] font-heading mt-1">Dashboard</span>
+          <span className="text-[10px] font-heading mt-1">Conversation</span>
         </Link>
-        <Link to="/tickets" className="flex flex-col items-center py-1 px-3 rounded-lg text-slate-600">
-          <TicketIcon size={18} />
-          <span className="text-[10px] font-heading mt-1">Tickets</span>
+        <Link to="/customers" className="flex flex-col items-center py-1 px-3 rounded-lg text-slate-600">
+          <UsersIcon size={18} />
+          <span className="text-[10px] font-heading mt-1">Customers</span>
         </Link>
-        <Link to="/reports?tab=tickets" className="flex flex-col items-center py-1 px-3 rounded-lg text-slate-600">
-          <BarChart3 size={18} />
-          <span className="text-[10px] font-heading mt-1">Reports</span>
+        <Link to="/reports" className="flex flex-col items-center py-1 px-3 rounded-lg text-slate-600">
+          <TrendingUp size={18} />
+          <span className="text-[10px] font-heading mt-1">Analytics</span>
         </Link>
       </div>
     </div>

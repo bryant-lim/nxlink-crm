@@ -160,50 +160,6 @@ export default async (req: Request, context: any) => {
 
     const insertedConvo = convData?.[0];
 
-    // Evaluate Auto-Ticket Rules
-    const tagsCombined = (conversation_tags || []).join(' ').toLowerCase();
-    const sentimentCombined = (extractedData.customer_sentiment || '').toLowerCase();
-    const summaryCombined = (extractedData.conversation_summary || '').toLowerCase();
-
-    let autoPriority: 'urgent' | 'high' | 'medium' | null = null;
-    let autoTitle = '';
-    let autoRole = 'support_manager';
-
-    if (tagsCombined.includes('dh - emergency') || tagsCombined.includes('emergency') || sentimentCombined.includes('emergency')) {
-      autoPriority = 'urgent';
-      autoTitle = '🚨 Emergency Ticket: Urgent Support / Sales Attention Required';
-      autoRole = 'support_manager';
-    } else if (tagsCombined.includes('hot lead') || tagsCombined.includes('sales lead') || tagsCombined.includes('demo requested')) {
-      autoPriority = 'high';
-      autoTitle = '🔥 Hot Lead Follow-Up Ticket';
-      autoRole = 'sales_person';
-    } else if (tagsCombined.includes('bug report') || tagsCombined.includes('refund') || sentimentCombined.includes('negative')) {
-      autoPriority = 'medium';
-      autoTitle = '⚠️ Support Case: Customer Issue Follow-up';
-      autoRole = 'support_manager';
-    }
-
-    let createdTicket = null;
-    if (autoPriority && insertedConvo) {
-      const sla = getSLAOffset(autoPriority);
-      const { data: ticketRes } = await supabase.from('tickets').insert([
-        {
-          conversation_id: insertedConvo.id,
-          customer_phone: extractedData.phone_number,
-          customer_name: extractedData.customer_name,
-          company_name: extractedData.company_name,
-          title: autoTitle,
-          description: extractedData.conversation_summary || 'Auto-created ticket from chat ingestion.',
-          priority: autoPriority,
-          status: 'open',
-          assigned_to_role: autoRole,
-          first_response_due_at: sla.first_response_due_at,
-          resolution_due_at: sla.resolution_due_at,
-        }
-      ]).select();
-      if (ticketRes) createdTicket = ticketRes[0];
-    }
-
     // Upsert Customer Profile
     if (extractedData.phone_number) {
       const cleanPhone = extractedData.phone_number.replace(/[^\d+]/g, '');
@@ -229,7 +185,7 @@ export default async (req: Request, context: any) => {
       await supabase.from('webhook_logs').update({ status: 'Success' }).eq('id', logId);
     }
 
-    return new Response(JSON.stringify({ success: true, conversation: insertedConvo, ticket: createdTicket }), { status: 200 });
+    return new Response(JSON.stringify({ success: true, conversation: insertedConvo }), { status: 200 });
 
   } catch (err: any) {
     console.error('Error processing request:', err);

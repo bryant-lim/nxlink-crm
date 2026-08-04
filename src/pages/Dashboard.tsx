@@ -20,7 +20,8 @@ import {
   ChevronRight,
   RefreshCw,
   Trash2,
-  Tag
+  Tag,
+  Info
 } from 'lucide-react';
 
 interface Conversation {
@@ -71,7 +72,7 @@ export default function Dashboard() {
   const location = useLocation();
   
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 15;
+  const [itemsPerPage, setItemsPerPage] = useState<number>(25);
 
   const [lastNxlinkSyncTime, setLastNxlinkSyncTime] = useState<string | null>(
     () => localStorage.getItem('lastNxlinkSyncTime')
@@ -94,7 +95,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, dateFilter]);
+  }, [searchTerm, dateFilter, itemsPerPage]);
 
   const getWebhookStatusMap = (): Record<string, { status: 'synced' | 'not_synced' | 'failed', error?: string, synced_at?: string }> => {
     try {
@@ -124,12 +125,21 @@ export default function Dashboard() {
       const mappedConvos = data.map(c => {
         const entry = statusMap[c.id];
         const isEligible = shouldSyncToWebhook(c.conversation_tags);
-        const defaultStatus = isEligible ? 'not_synced' : 'synced';
+        
+        let status: 'synced' | 'not_synced' | 'failed' = 'synced';
+        if (c.webhook_status) {
+          status = c.webhook_status as any;
+        } else if (entry) {
+          status = entry.status;
+        } else if (isEligible) {
+          status = 'synced';
+        }
+
         return {
           ...c,
-          webhook_status: entry ? entry.status : defaultStatus,
-          webhook_error: entry ? entry.error : null,
-          webhook_synced_at: entry ? (entry.synced_at || null) : (defaultStatus === 'synced' ? `${c.conversation_date || ''} ${c.conversation_time || ''}`.trim() : null)
+          webhook_status: status,
+          webhook_error: entry ? entry.error : (c.webhook_error || null),
+          webhook_synced_at: entry ? (entry.synced_at || null) : (c.webhook_synced_at || (status === 'synced' ? `${c.conversation_date || ''} ${c.conversation_time || ''}`.trim() : null))
         };
       });
       setConversations(mappedConvos);
@@ -422,35 +432,46 @@ export default function Dashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* Sync NXLINK Button & Last Sync Date */}
-          <div className="flex flex-col items-start">
-            <button
-              disabled={nxlinkSyncing}
-              onClick={triggerNxlinkSync}
-              className="py-2 px-3.5 bg-blue-600 hover:bg-blue-700 text-white font-heading text-xs font-bold rounded-lg transition-colors flex items-center justify-center space-x-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
-            >
-              {nxlinkSyncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-              <span>Sync NXLINK Conversations</span>
-            </button>
-            <span className="text-[10px] font-mono text-slate-500 mt-1">
-              Last NXLINK Sync: {lastNxlinkSyncTime || 'Not run yet'}
-            </span>
-          </div>
-
-          <div className="flex items-center space-x-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-heading shadow-2xs self-start">
-            <Clock size={13} className="text-slate-400" />
-            <span className="text-slate-500 font-semibold">Auto-Sync:</span>
-            <select
-              value={autoSyncInterval}
-              onChange={(e) => setAutoSyncInterval(e.target.value as any)}
-              className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer"
-            >
-              <option value="off">Off</option>
-              <option value="1">Every 1m</option>
-              <option value="5">Every 5m</option>
-              <option value="15">Every 15m</option>
-              <option value="30">Every 30m</option>
-            </select>
+          {/* Sync from NXLink Group */}
+          <div className="flex flex-col items-start space-y-1">
+            <div className="flex items-center space-x-1.5">
+              <button
+                disabled={nxlinkSyncing}
+                onClick={triggerNxlinkSync}
+                className="py-2 px-3.5 bg-transparent border border-emerald-600 hover:bg-emerald-50/60 text-emerald-700 font-heading text-xs font-bold rounded-lg transition-colors flex items-center justify-center space-x-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
+              >
+                {nxlinkSyncing ? <Loader2 size={14} className="animate-spin text-emerald-600" /> : <RefreshCw size={14} className="text-emerald-600" />}
+                <span>Sync from NXLink</span>
+              </button>
+              <div 
+                className="group relative flex items-center justify-center p-1 text-emerald-600 hover:text-emerald-800 cursor-pointer"
+                title="Sync AI Conversation record from NXLink, based on the auto-sync frequency."
+              >
+                <Info size={15} />
+                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:block w-60 p-2 bg-slate-900 text-white text-[11px] font-sans font-medium rounded-md shadow-lg z-50 text-center leading-snug pointer-events-none">
+                  Sync AI Conversation record from NXLink, based on the auto-sync frequency.
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2 text-[10px]">
+              <span className="font-mono text-slate-500">Last Sync: {lastNxlinkSyncTime || 'Not run yet'}</span>
+              <span className="text-slate-300">•</span>
+              <div className="flex items-center space-x-1 text-slate-600 font-heading">
+                <Clock size={11} className="text-emerald-600" />
+                <span className="font-medium text-slate-500">Auto-Sync:</span>
+                <select
+                  value={autoSyncInterval}
+                  onChange={(e) => setAutoSyncInterval(e.target.value as any)}
+                  className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
+                >
+                  <option value="off">Off</option>
+                  <option value="1">Every 1m</option>
+                  <option value="5">Every 5m</option>
+                  <option value="15">Every 15m</option>
+                  <option value="30">Every 30m</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           {selectedRowIds.length > 0 && (
@@ -466,18 +487,29 @@ export default function Dashboard() {
             </button>
           )}
 
-          {/* Sync Webhook Button & Last Sync Date */}
-          <div className="flex flex-col items-start">
-            <button
-              disabled={webhookSyncing}
-              onClick={() => pushToWebhook(filtered)}
-              className="py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-heading text-xs font-bold rounded-lg transition-colors flex items-center justify-center shadow-2xs cursor-pointer disabled:opacity-50"
-            >
-              {webhookSyncing ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}
-              <span>Sync Tagged Records to Webhook</span>
-            </button>
-            <span className="text-[10px] font-mono text-slate-500 mt-1">
-              Last Webhook Sync: {lastWebhookSyncTime || 'Not run yet'}
+          {/* Webhook Sync Button & Last Sync Date */}
+          <div className="flex flex-col items-start space-y-1">
+            <div className="flex items-center space-x-1.5">
+              <button
+                disabled={webhookSyncing}
+                onClick={() => pushToWebhook(filtered)}
+                className="py-2 px-3.5 bg-transparent border border-blue-600 hover:bg-blue-50/60 text-blue-700 font-heading text-xs font-bold rounded-lg transition-colors flex items-center justify-center space-x-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
+              >
+                {webhookSyncing ? <Loader2 size={14} className="animate-spin text-blue-600" /> : null}
+                <span>Webhook Sync</span>
+              </button>
+              <div 
+                className="group relative flex items-center justify-center p-1 text-blue-600 hover:text-blue-800 cursor-pointer"
+                title="Sync AI Conversation with Hot Lead/Booking Appointment Tag Only"
+              >
+                <Info size={15} />
+                <div className="absolute right-0 top-full mt-2 hidden group-hover:block w-56 p-2 bg-slate-900 text-white text-[11px] font-sans font-medium rounded-md shadow-lg z-50 text-center leading-snug pointer-events-none">
+                  Sync AI Conversation with Hot Lead/Booking Appointment Tag Only
+                </div>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono text-slate-500">
+              Last Sync: {lastWebhookSyncTime || 'Not run yet'}
             </span>
           </div>
         </div>
@@ -549,6 +581,51 @@ export default function Dashboard() {
           </div>
         ) : (
           <>
+            {/* Top Table Pagination Controls */}
+            <div className="px-4 py-2.5 border-b border-slate-200 bg-slate-50/70 flex flex-wrap items-center justify-between gap-3 text-xs font-heading">
+              <div className="flex items-center space-x-3">
+                <span className="text-slate-500">
+                  Showing {filtered.length === 0 ? 0 : startIndex + 1}-{Math.min(startIndex + itemsPerPage, filtered.length)} of {filtered.length}
+                </span>
+                <span className="text-slate-300">|</span>
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-slate-500 font-medium">Per page:</span>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                    className="bg-white border border-slate-200 rounded px-2 py-0.5 font-bold text-slate-800 focus:outline-none cursor-pointer text-xs shadow-2xs"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  className="px-2 py-1 bg-white border border-slate-200 rounded text-slate-700 hover:bg-slate-100 disabled:opacity-40 cursor-pointer font-medium flex items-center space-x-1 shadow-2xs"
+                >
+                  <ChevronLeft size={14} />
+                  <span>Prev</span>
+                </button>
+                <span className="text-slate-700 font-semibold font-mono px-1">
+                  Page {currentPage} of {totalPages || 1}
+                </span>
+                <button
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  className="px-2 py-1 bg-white border border-slate-200 rounded text-slate-700 hover:bg-slate-100 disabled:opacity-40 cursor-pointer font-medium flex items-center space-x-1 shadow-2xs"
+                >
+                  <span>Next</span>
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+
             {/* Desktop Table View */}
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -664,27 +741,43 @@ export default function Dashboard() {
               </table>
             </div>
 
-            {/* Pagination Controls */}
-            <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs font-heading">
-              <span className="text-slate-500">
-                Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filtered.length)} of {filtered.length}
-              </span>
+            {/* Bottom Pagination Controls */}
+            <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 text-xs font-heading">
+              <div className="flex items-center space-x-3">
+                <span className="text-slate-500">
+                  Showing {filtered.length === 0 ? 0 : startIndex + 1}-{Math.min(startIndex + itemsPerPage, filtered.length)} of {filtered.length}
+                </span>
+                <span className="text-slate-300">|</span>
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-slate-500 font-medium">Per page:</span>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                    className="bg-white border border-slate-200 rounded px-2 py-0.5 font-bold text-slate-800 focus:outline-none cursor-pointer text-xs shadow-2xs"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+              </div>
 
               <div className="flex items-center space-x-2">
                 <button
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  className="px-2.5 py-1 bg-white border border-slate-200 rounded text-slate-700 hover:bg-slate-100 disabled:opacity-40 cursor-pointer font-medium"
+                  className="px-2.5 py-1 bg-white border border-slate-200 rounded text-slate-700 hover:bg-slate-100 disabled:opacity-40 cursor-pointer font-medium shadow-2xs"
                 >
                   <ChevronLeft size={14} />
                 </button>
                 <span className="text-slate-700 font-semibold font-mono">
-                  Page {currentPage} of {totalPages}
+                  Page {currentPage} of {totalPages || 1}
                 </span>
                 <button
-                  disabled={currentPage === totalPages}
+                  disabled={currentPage >= totalPages}
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  className="px-2.5 py-1 bg-white border border-slate-200 rounded text-slate-700 hover:bg-slate-100 disabled:opacity-40 cursor-pointer font-medium"
+                  className="px-2.5 py-1 bg-white border border-slate-200 rounded text-slate-700 hover:bg-slate-100 disabled:opacity-40 cursor-pointer font-medium shadow-2xs"
                 >
                   <ChevronRight size={14} />
                 </button>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import type { ConversationData } from '../lib/ticketing';
-import { normalizePhoneNumber } from '../lib/ticketing';
+import type { ConversationData } from '../lib/types';
+import { normalizePhoneNumber } from '../lib/types';
 import { 
   Search, 
   Loader2, 

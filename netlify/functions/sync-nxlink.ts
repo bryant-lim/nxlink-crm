@@ -114,8 +114,11 @@ const syncNxlinkHandler: Handler = async () => {
       try {
         const tokenResp = await fetch(tokenUrl);
         if (tokenResp.ok) {
-          const tData: any = await tokenResp.json();
-          token = tData.token || '';
+          const tText = await tokenResp.text();
+          try {
+            const tData: any = JSON.parse(tText);
+            token = tData.token || '';
+          } catch (e) {}
         }
       } catch (e) {}
     }
@@ -146,7 +149,16 @@ const syncNxlinkHandler: Handler = async () => {
       });
 
       if (!convResp.ok) break;
-      const convData = await convResp.json();
+
+      const rawText = await convResp.text();
+      let convData: any = {};
+      try {
+        convData = JSON.parse(rawText);
+      } catch (e) {
+        console.warn(`[Sync] Non-JSON response received from conversation list API on page ${pageNum}:`, rawText.slice(0, 150));
+        break;
+      }
+
       const pageList = convData.list || convData.data?.list || convData.data || [];
       if (!Array.isArray(pageList) || pageList.length === 0) break;
 
@@ -198,8 +210,16 @@ const syncNxlinkHandler: Handler = async () => {
         headers: { 'authorization': token }
       });
 
-      const msgData = msgResp.ok ? await msgResp.json() : {};
-      const messages = msgData.data || msgData.list || [];
+      let messages: any[] = [];
+      if (msgResp.ok) {
+        const msgText = await msgResp.text();
+        try {
+          const msgData = JSON.parse(msgText);
+          messages = msgData.data || msgData.list || [];
+        } catch (e) {
+          console.warn(`[Sync] Non-JSON response for conversation messages ID ${convId}`);
+        }
+      }
       const meta = extractSummaryMetadata(messages, conv);
 
       let tagsList: string[] = [];
@@ -277,7 +297,7 @@ const syncNxlinkHandler: Handler = async () => {
 
         if (webhookUrl && clientId && clientSecret) {
           try {
-            await fetch(webhookUrl, {
+            const resp = await fetch(webhookUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'client_id': clientId, 'client_secret': clientSecret },
               body: JSON.stringify({
@@ -296,7 +316,14 @@ const syncNxlinkHandler: Handler = async () => {
                 }
               })
             });
-            webhookPushedCount++;
+            if (resp.ok) {
+              webhookPushedCount++;
+              await supabase.from('conversations').update({
+                webhook_status: 'synced',
+                webhook_synced_at: new Date().toISOString(),
+                webhook_error: null
+              }).filter('conversation_transcript', 'ilike', `%[nxlink_id:${convId}]%`);
+            }
           } catch (e) {}
         }
       }

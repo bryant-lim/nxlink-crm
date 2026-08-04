@@ -6,6 +6,7 @@ import Customers from './pages/Customers';
 import Reports from './pages/Reports';
 import Users from './pages/Users';
 import ApiDocs from './pages/ApiDocs';
+import DatabaseMetrics from './pages/DatabaseMetrics';
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
           <Route path="/users" element={<Users />} />
           <Route path="/analytics" element={<Navigate to="/reports" replace />} />
           <Route path="/api-docs" element={<ApiDocs />} />
+          <Route path="/db-metrics" element={<DatabaseMetrics />} />
         </Route>
       </Routes>
     </Router>

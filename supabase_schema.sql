@@ -13,8 +13,16 @@ CREATE TABLE IF NOT EXISTS public.conversations (
     conversation_transcript TEXT,
     next_steps TEXT,
     call_audio_url TEXT,
+    webhook_status TEXT DEFAULT 'not_synced',
+    webhook_synced_at TIMESTAMP WITH TIME ZONE,
+    webhook_error TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Drop ticket tables if they exist
+DROP TABLE IF EXISTS public.ticket_notes CASCADE;
+DROP TABLE IF EXISTS public.ticket_activity_logs CASCADE;
+DROP TABLE IF EXISTS public.tickets CASCADE;
 
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 
@@ -60,83 +68,7 @@ ON public.profiles FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Allow service role to manage profiles"
 ON public.profiles FOR ALL TO service_role USING (true) WITH CHECK (true);
 
--- 2. Create the tickets table with category & assignee columns
-CREATE TABLE IF NOT EXISTS public.tickets (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    conversation_id UUID REFERENCES public.conversations(id) ON DELETE SET NULL,
-    customer_phone TEXT,
-    customer_name TEXT,
-    company_name TEXT,
-    title TEXT NOT NULL,
-    description TEXT,
-    category TEXT DEFAULT 'Support', -- 'Support', 'Sales-Follow Up', 'Billing', 'Bug Report', 'Emergency'
-    priority TEXT NOT NULL DEFAULT 'medium', -- 'urgent', 'high', 'medium', 'low'
-    status TEXT NOT NULL DEFAULT 'open', -- 'open', 'in_progress', 'pending_customer', 'resolved', 'closed'
-    assigned_to_role TEXT DEFAULT 'support_manager',
-    assigned_user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-    assigned_user_name TEXT,
-    first_response_due_at TIMESTAMP WITH TIME ZONE,
-    resolution_due_at TIMESTAMP WITH TIME ZONE,
-    responded_at TIMESTAMP WITH TIME ZONE,
-    resolved_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-ALTER TABLE public.tickets ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Allow authenticated users to manage tickets" ON public.tickets;
-DROP POLICY IF EXISTS "Allow service role to manage tickets" ON public.tickets;
-
-CREATE POLICY "Allow authenticated users to manage tickets"
-ON public.tickets FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
-CREATE POLICY "Allow service role to manage tickets"
-ON public.tickets FOR ALL TO service_role USING (true) WITH CHECK (true);
-
--- 3. Create ticket_activity_logs table for audit trail
-CREATE TABLE IF NOT EXISTS public.ticket_activity_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    ticket_id UUID NOT NULL REFERENCES public.tickets(id) ON DELETE CASCADE,
-    actor_name TEXT NOT NULL,
-    action_type TEXT NOT NULL, -- 'owner_changed', 'status_changed', 'priority_changed', 'category_changed'
-    old_value TEXT,
-    new_value TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-ALTER TABLE public.ticket_activity_logs ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Allow authenticated users to manage activity logs" ON public.ticket_activity_logs;
-DROP POLICY IF EXISTS "Allow service role to manage activity logs" ON public.ticket_activity_logs;
-
-CREATE POLICY "Allow authenticated users to manage activity logs"
-ON public.ticket_activity_logs FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
-CREATE POLICY "Allow service role to manage activity logs"
-ON public.ticket_activity_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
-
--- 4. Create ticket_notes table for internal remarks
-CREATE TABLE IF NOT EXISTS public.ticket_notes (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    ticket_id UUID NOT NULL REFERENCES public.tickets(id) ON DELETE CASCADE,
-    author_name TEXT NOT NULL,
-    note_text TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-ALTER TABLE public.ticket_notes ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Allow authenticated users to manage ticket notes" ON public.ticket_notes;
-DROP POLICY IF EXISTS "Allow service role to manage ticket notes" ON public.ticket_notes;
-
-CREATE POLICY "Allow authenticated users to manage ticket notes"
-ON public.ticket_notes FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
-CREATE POLICY "Allow service role to manage ticket notes"
-ON public.ticket_notes FOR ALL TO service_role USING (true) WITH CHECK (true);
-
--- 5. Create customer_profiles table for consolidation
+-- 2. Create customer_profiles table for consolidation
 CREATE TABLE IF NOT EXISTS public.customer_profiles (
     phone_number TEXT PRIMARY KEY,
     customer_name TEXT,
@@ -163,11 +95,12 @@ ON public.customer_profiles FOR ALL TO authenticated USING (true) WITH CHECK (tr
 CREATE POLICY "Allow service role to manage customer profiles"
 ON public.customer_profiles FOR ALL TO service_role USING (true) WITH CHECK (true);
 
--- 6. Enable RLS permissions for profiles table
+-- 3. Enable RLS permissions for profiles table
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Allow authenticated and service role to manage profiles" ON public.profiles;
 
 CREATE POLICY "Allow authenticated and service role to manage profiles"
 ON public.profiles FOR ALL USING (true) WITH CHECK (true);
+
 

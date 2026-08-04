@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import type { ConversationData, Ticket } from '../lib/ticketing';
+import type { ConversationData } from '../lib/types';
 import { 
   Tag as TagIcon, 
   Search, 
@@ -14,7 +14,6 @@ interface TagMetric {
   tag: string;
   count: number;
   conversations: ConversationData[];
-  tickets: Ticket[];
   closingRate: number;
   retentionRate: number;
 }
@@ -30,46 +29,28 @@ export default function TagAnalytics() {
   }, []);
 
   const fetchTagAnalytics = async () => {
-    const [convRes, ticketRes] = await Promise.all([
-      supabase.from('conversations').select('*').order('created_at', { ascending: false }),
-      supabase.from('tickets').select('*').order('created_at', { ascending: false })
-    ]);
+    const convRes = await supabase
+      .from('conversations')
+      .select('*')
+      .order('created_at', { ascending: false });
 
     const convos: ConversationData[] = convRes.data || [];
-    const tickets: Ticket[] = ticketRes.data || [];
 
-    const tagMap = new Map<string, {
-      conversations: ConversationData[];
-      tickets: Ticket[];
-    }>();
+    const tagMap = new Map<string, ConversationData[]>();
 
     convos.forEach((c) => {
       const tags = c.conversation_tags || ['Untagged'];
       tags.forEach((rawTag) => {
         const tag = rawTag.trim();
         if (!tagMap.has(tag)) {
-          tagMap.set(tag, { conversations: [], tickets: [] });
+          tagMap.set(tag, []);
         }
-        tagMap.get(tag)!.conversations.push(c);
+        tagMap.get(tag)!.push(c);
       });
     });
 
-    tickets.forEach((t) => {
-      if (t.conversation_id) {
-        const matchingConvo = convos.find(c => c.id === t.conversation_id);
-        if (matchingConvo && matchingConvo.conversation_tags) {
-          matchingConvo.conversation_tags.forEach((rawTag) => {
-            const tag = rawTag.trim();
-            if (tagMap.has(tag)) {
-              tagMap.get(tag)!.tickets.push(t);
-            }
-          });
-        }
-      }
-    });
-
-    const metrics: TagMetric[] = Array.from(tagMap.entries()).map(([tag, data]) => {
-      const count = data.conversations.length;
+    const metrics: TagMetric[] = Array.from(tagMap.entries()).map(([tag, convosList]) => {
+      const count = convosList.length;
       let closingRate = 68;
       let retentionRate = 82;
 
@@ -91,8 +72,7 @@ export default function TagAnalytics() {
       return {
         tag,
         count,
-        conversations: data.conversations,
-        tickets: data.tickets,
+        conversations: convosList,
         closingRate,
         retentionRate
       };

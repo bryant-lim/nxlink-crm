@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import type { ConversationData } from '../lib/ticketing';
 import DateFilter, { filterRecordsByDate } from '../components/DateFilter';
 import type { DateFilterValue } from '../components/DateFilter';
 import { 
@@ -11,6 +10,26 @@ import {
   MessageSquare,
   Sparkles
 } from 'lucide-react';
+
+export interface ConversationData {
+  id: string;
+  customer_name?: string | null;
+  phone_number?: string | null;
+  email_address?: string | null;
+  customer_sentiment?: string | null;
+  company_name?: string | null;
+  conversation_summary?: string | null;
+  conversation_date?: string | null;
+  conversation_time?: string | null;
+  conversation_tags?: string[] | null;
+  conversation_transcript?: string | null;
+  next_steps?: string | null;
+  call_audio_url?: string | null;
+  webhook_status?: 'synced' | 'not_synced' | 'failed' | null;
+  webhook_error?: string | null;
+  webhook_synced_at?: string | null;
+  created_at: string;
+}
 
 interface TagCloudItem {
   tag: string;

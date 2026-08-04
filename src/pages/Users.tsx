@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import type { UserProfile } from '../lib/ticketing';
+import type { UserProfile } from '../lib/types';
 import { 
   Users as UsersIcon, 
   UserPlus, 
