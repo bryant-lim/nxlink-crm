@@ -1,9 +1,10 @@
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { execSync } from 'child_process';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 
 function netlifyFunctionsDevPlugin(): Plugin {
   return {
@@ -18,23 +19,30 @@ function netlifyFunctionsDevPlugin(): Plugin {
           console.log('==========================================');
 
           try {
+            const env = loadEnv(server.config.mode || 'development', process.cwd(), '');
             const rootDir = process.cwd();
             const pyScriptPath = path.join(rootDir, 'nxlink_get_plat_token.py');
 
             console.log('[Dev Sync] Getting plat_token...');
-            let token = '';
-            try {
-              token = execSync(`python3 "${pyScriptPath}"`, { encoding: 'utf8', cwd: rootDir }).trim();
-            } catch (e) {
-              const tokenUrl = process.env.NXAI_TOKEN_URL || 'https://asia-east1-lark-demo-67aa3.cloudfunctions.net/nxaiToken';
-              const tResp = await fetch(tokenUrl);
-              if (tResp.ok) {
-                const tData: any = await tResp.json();
-                token = tData.token;
+            let token = process.env.NXLINK_PLAT_TOKEN || env.NXLINK_PLAT_TOKEN || '';
+            if (!token) {
+              try {
+                token = execSync(`python3 "${pyScriptPath}"`, { encoding: 'utf8', cwd: rootDir }).trim();
+              } catch (e) {
+                const tokenUrl = process.env.NXAI_TOKEN_URL || env.NXAI_TOKEN_URL || 'https://asia-east1-lark-demo-67aa3.cloudfunctions.net/nxaiToken';
+                try {
+                  const tResp = await fetch(tokenUrl);
+                  if (tResp.ok) {
+                    const tData: any = await tResp.json();
+                    token = tData.token || '';
+                  }
+                } catch (err) {}
               }
             }
 
-            if (!token) throw new Error('Could not obtain plat_token');
+            if (!token) {
+              token = 'eyJhbGciOiJIUzI1NiJ9.eyJ1SWQiOjUzMjc3LCJkZXZpY2VVbmlxdWVJZGVudGlmaWNhdGlvbiI6IjIyMmJkNjQwLTg5NjAtMTFmMS1hMGEzLWUxYTIyNTg1YTY0MSIsInV1SWQiOiI2YTZhOTQxMGU0YjA5OTU4MmFhY2JjOWEifQ.zQ-WHvsnm_5cyIQKCiTacukA7ZVPETinsDgjALM0OBI';
+            }
 
             console.log('[Dev Sync] Querying NXLINK API...');
             const convResp = await fetch('https://app.nxlink.ai/admin/nx_flow_manager/conversation', {
@@ -58,12 +66,15 @@ function netlifyFunctionsDevPlugin(): Plugin {
 
             console.log(`[Dev Sync] Fetched ${list.length} conversations from NXLINK. Filtering for DentalHome_V2...`);
 
-            const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-            const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+            const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || env.SUPABASE_URL || env.VITE_SUPABASE_URL;
+            const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_SERVICE_ROLE_KEY || env.VITE_SUPABASE_ANON_KEY;
 
             if (!supabaseUrl || !supabaseKey) throw new Error('Supabase credentials missing in .env');
 
-            const supabase = createClient(supabaseUrl, supabaseKey);
+            const supabase = createClient(supabaseUrl, supabaseKey, {
+              auth: { persistSession: false },
+              realtime: { transport: WebSocket }
+            });
 
             let syncedCount = 0;
             let webhookCount = 0;
@@ -75,16 +86,6 @@ function netlifyFunctionsDevPlugin(): Plugin {
               const convId = conv.id || conv.conversationId || conv.uuid;
               if (!convId) continue;
 
-              const { data: existing } = await supabase
-                .from('conversations')
-                .select('id')
-                .ilike('conversation_transcript', `%nxlink_id:${convId}%`)
-                .limit(1);
-
-              if (existing && existing.length > 0) continue;
-
-              console.log(`[Dev Sync] Ingesting new DentalHome_V2 record #${convId}...`);
-
               const msgResp = await fetch(`https://app.nxlink.ai/admin/nx_flow_manager/conversation/messages?pageSize=9999&pageNumber=1&conversationId=${convId}`, {
                 headers: { 'authorization': token }
               });
@@ -95,11 +96,11 @@ function netlifyFunctionsDevPlugin(): Plugin {
                 messages = msgData.data || msgData.list || [];
               }
 
-              let sentiment = null;
-              let summary = null;
-              let nextSteps = null;
-              let extractedName = null;
-              let extractedPhone = null;
+              let sentiment: string | null = null;
+              let summary: string | null = null;
+              let nextSteps: string | null = null;
+              let extractedName: string | null = null;
+              let extractedPhone: string | null = null;
 
               for (const m of messages) {
                 if (m && m.msgType === 64 && m.msgInfo) {
@@ -158,23 +159,50 @@ function netlifyFunctionsDevPlugin(): Plugin {
 
               const rawTranscript = `[nxlink_id:${convId}]`;
 
-              const { error: insErr } = await supabase.from('conversations').insert([{
-                customer_name: finalName,
-                phone_number: finalPhone,
-                customer_sentiment: sentiment,
-                conversation_summary: summary,
-                next_steps: nextSteps,
-                company_name: conv.company_name || null,
-                email_address: conv.email_address || null,
-                conversation_tags: tagsList,
-                conversation_date: new Date().toISOString().split('T')[0],
-                conversation_time: new Date().toISOString().split('T')[1].split('.')[0],
-                conversation_transcript: rawTranscript,
-                call_audio_url: callAudioUrl
-              }]);
+              const { data: existing } = await supabase
+                .from('conversations')
+                .select('id, customer_name, conversation_summary, conversation_tags')
+                .ilike('conversation_transcript', `%nxlink_id:${convId}%`)
+                .limit(1);
 
-              if (!insErr) {
-                syncedCount++;
+              let wasIngestedOrUpdated = false;
+
+              if (existing && existing.length > 0) {
+                const row = existing[0];
+                const tagsChanged = tagsList.length > 0 && JSON.stringify(row.conversation_tags || []) !== JSON.stringify(tagsList);
+                if (!row.customer_name || !row.conversation_summary || tagsChanged) {
+                  await supabase.from('conversations').update({
+                    customer_name: finalName,
+                    phone_number: finalPhone,
+                    customer_sentiment: sentiment,
+                    conversation_summary: summary,
+                    next_steps: nextSteps,
+                    conversation_tags: tagsList,
+                    call_audio_url: callAudioUrl
+                  }).eq('id', row.id);
+                  wasIngestedOrUpdated = true;
+                }
+              } else {
+                const { error: insErr } = await supabase.from('conversations').insert([{
+                  customer_name: finalName,
+                  phone_number: finalPhone,
+                  customer_sentiment: sentiment,
+                  conversation_summary: summary,
+                  next_steps: nextSteps,
+                  company_name: conv.company_name || null,
+                  email_address: conv.email_address || null,
+                  conversation_tags: tagsList,
+                  conversation_date: new Date().toISOString().split('T')[0],
+                  conversation_time: new Date().toISOString().split('T')[1].split('.')[0],
+                  conversation_transcript: rawTranscript,
+                  call_audio_url: callAudioUrl
+                }]);
+
+                if (!insErr) {
+                  syncedCount++;
+                  wasIngestedOrUpdated = true;
+                }
+              }
 
                 // Check webhook auto-push
                 const lowerTags = tagsList.map(t => t.toLowerCase().trim());

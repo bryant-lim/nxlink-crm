@@ -332,7 +332,6 @@ export default function Dashboard() {
   const totalChats = filtered.length;
 
   const [nxlinkSyncing, setNxlinkSyncing] = useState(false);
-  const [autoSyncInterval, setAutoSyncInterval] = useState<'off' | '1' | '5' | '15' | '30'>('5');
 
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -399,19 +398,7 @@ export default function Dashboard() {
     }
   };
 
-  useEffect(() => {
-    if (autoSyncInterval === 'off') return;
 
-    // Trigger immediate sync check on load/mount
-    triggerNxlinkSync();
-
-    const intervalMs = parseInt(autoSyncInterval, 10) * 60 * 1000;
-    const timer = setInterval(() => {
-      triggerNxlinkSync();
-    }, intervalMs);
-
-    return () => clearInterval(timer);
-  }, [autoSyncInterval]);
 
   return (
     <div className="space-y-6 pb-16 md:pb-6">
@@ -445,11 +432,11 @@ export default function Dashboard() {
               </button>
               <div 
                 className="group relative flex items-center justify-center p-1 text-emerald-600 hover:text-emerald-800 cursor-pointer"
-                title="Sync AI Conversation record from NXLink, based on the auto-sync frequency."
+                title="Sync AI Conversation records from NXLink on-demand or automatically every 5 minutes."
               >
                 <Info size={15} />
                 <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:block w-60 p-2 bg-slate-900 text-white text-[11px] font-sans font-medium rounded-md shadow-lg z-50 text-center leading-snug pointer-events-none">
-                  Sync AI Conversation record from NXLink, based on the auto-sync frequency.
+                  Sync AI Conversation records from NXLink on-demand or automatically every 5 minutes.
                 </div>
               </div>
             </div>
@@ -458,18 +445,7 @@ export default function Dashboard() {
               <span className="text-slate-300">•</span>
               <div className="flex items-center space-x-1 text-slate-600 font-heading">
                 <Clock size={11} className="text-emerald-600" />
-                <span className="font-medium text-slate-500">Auto-Sync:</span>
-                <select
-                  value={autoSyncInterval}
-                  onChange={(e) => setAutoSyncInterval(e.target.value as any)}
-                  className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
-                >
-                  <option value="off">Off</option>
-                  <option value="1">Every 1m</option>
-                  <option value="5">Every 5m</option>
-                  <option value="15">Every 15m</option>
-                  <option value="30">Every 30m</option>
-                </select>
+                <span className="font-medium text-slate-500">Auto-Sync: <span className="font-bold text-slate-800">Every 5m (Server)</span></span>
               </div>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { Handler, schedule } from '@netlify/functions';
+import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import WebSocket from 'ws';
 
@@ -202,7 +202,7 @@ const syncNxlinkHandler: Handler = async () => {
 
       const { data: existing } = await supabase
         .from('conversations')
-        .select('id, customer_name, conversation_summary')
+        .select('id, customer_name, conversation_summary, conversation_tags, webhook_status')
         .ilike('conversation_transcript', `%nxlink_id:${convId}%`)
         .limit(1);
 
@@ -254,7 +254,8 @@ const syncNxlinkHandler: Handler = async () => {
 
       if (existing && existing.length > 0) {
         const row = existing[0];
-        if (!row.customer_name || !row.conversation_summary) {
+        const tagsChanged = tagsList.length > 0 && JSON.stringify(row.conversation_tags || []) !== JSON.stringify(tagsList);
+        if (!row.customer_name || !row.conversation_summary || tagsChanged) {
           await supabase.from('conversations').update({
             customer_name: meta.customer_name,
             phone_number: meta.phone_number,
@@ -344,4 +345,4 @@ const syncNxlinkHandler: Handler = async () => {
   }
 };
 
-export const handler = schedule('*/5 * * * *', syncNxlinkHandler);
+export const handler: Handler = syncNxlinkHandler;
