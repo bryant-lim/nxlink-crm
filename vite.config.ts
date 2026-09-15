@@ -73,7 +73,7 @@ function netlifyFunctionsDevPlugin(): Plugin {
 
             const supabase = createClient(supabaseUrl, supabaseKey, {
               auth: { persistSession: false },
-              realtime: { transport: WebSocket }
+              realtime: { transport: WebSocket as any }
             });
 
             let syncedCount = 0;
@@ -211,7 +211,7 @@ function netlifyFunctionsDevPlugin(): Plugin {
                 const hasEmergency = lowerTags.some(t => t.includes('emergency') || t.includes('check booking'));
                 const shouldPush = !isOnlyRouting && !hasEmergency && lowerTags.some(t => t.includes('hot lead') || t.includes('warm lead') || t.includes('booking appointment'));
 
-                if (shouldPush) {
+                if (wasIngestedOrUpdated && shouldPush) {
                   const webhookUrl = process.env.NXLINK_WEBHOOK_URL || 'https://asia-east1-lark-demo-67aa3.cloudfunctions.net/nxlinkWebhook';
                   const clientId = process.env.NXLINK_WEBHOOK_CLIENT_ID || 'nxw_41ef8e4dee35cd8e4c6c1d3e';
                   const clientSecret = process.env.NXLINK_WEBHOOK_CLIENT_SECRET || '8ab7881cfcf9cd8428274ff2771875277c06be7404a3d4b20365bd584649ceea';
