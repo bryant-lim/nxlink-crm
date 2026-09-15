@@ -104,7 +104,7 @@ const syncNxlinkHandler: Handler = async () => {
 
   const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false },
-    realtime: { transport: WebSocket }
+    realtime: { transport: WebSocket as any }
   });
 
   try {
@@ -202,7 +202,7 @@ const syncNxlinkHandler: Handler = async () => {
 
       const { data: existing } = await supabase
         .from('conversations')
-        .select('id, customer_name, conversation_summary, conversation_tags, webhook_status')
+        .select('id, customer_name, conversation_summary, conversation_tags')
         .ilike('conversation_transcript', `%nxlink_id:${convId}%`)
         .limit(1);
 
@@ -319,11 +319,6 @@ const syncNxlinkHandler: Handler = async () => {
             });
             if (resp.ok) {
               webhookPushedCount++;
-              await supabase.from('conversations').update({
-                webhook_status: 'synced',
-                webhook_synced_at: new Date().toISOString(),
-                webhook_error: null
-              }).filter('conversation_transcript', 'ilike', `%[nxlink_id:${convId}]%`);
             }
           } catch (e) {}
         }
