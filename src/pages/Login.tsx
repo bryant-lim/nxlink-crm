@@ -37,14 +37,7 @@ export default function Login() {
       
       <div className="max-w-md w-full bg-nx-card border border-gray-200 rounded-2xl shadow-xl p-8 z-10 relative">
         <div className="flex flex-col items-center mb-8">
-          <div className="flex items-center mb-6">
-             <div className="w-10 h-10 bg-nx-green rounded-lg flex items-center justify-center mr-3 shadow-sm">
-               <span className="text-white font-bold text-lg">NX</span>
-             </div>
-             <span className="text-2xl font-bold text-nx-dark tracking-wide">NXLink CRM</span>
-          </div>
-          <h2 className="text-xl font-semibold text-gray-800">Welcome Back</h2>
-          <p className="text-gray-500 text-sm mt-1">Sign in to access your dashboard</p>
+          <h1 className="text-2xl font-bold text-nx-dark tracking-wide">Dental Home Bridge</h1>
         </div>
 
         {error && (
