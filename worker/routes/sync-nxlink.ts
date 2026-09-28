@@ -120,12 +120,21 @@ function shouldSyncToWebhook(tags: any[]) {
 function resolveChannel(conv: any): string {
   const sourceChannel = conv.source_channel || conv.sourceChannel;
   const instance = (conv.channel_instance || conv.channelInstance || '').toLowerCase();
+  const bizPhone = (conv.business_phone || conv.businessPhone || '').toLowerCase();
+
+  // Webchat checks first, because both Webchat and WhatsApp flow bots share sourceChannel === 18
+  if (
+    instance.includes('web') ||
+    instance.includes('demo') ||
+    instance.includes('livechat') ||
+    instance.includes('chatbot') ||
+    bizPhone.startsWith('chatbot')
+  ) {
+    return 'Webchat';
+  }
 
   if (sourceChannel === 18 || instance.includes('whatsapp') || instance.includes('wa')) {
     return 'Whatsapp';
-  }
-  if (instance.includes('web') || instance.includes('livechat')) {
-    return 'Webchat';
   }
   if (instance.includes('messenger') || instance.includes('fb') || instance.includes('facebook')) {
     return 'Messenger';
@@ -145,7 +154,7 @@ function resolveChannel(conv: any): string {
     case 20:
       return 'Instagram';
     default:
-      return conv.channel_instance || 'Whatsapp';
+      return conv.channel_instance || 'Webchat';
   }
 }
 
@@ -210,70 +219,86 @@ export async function runNxlinkSync(env: Env) {
     console.warn('Failed to load webhook URL from app_settings, using fallback');
   }
 
-  let conversations: any[] = [];
-  let consecutiveAlreadySyncedPages = 0;
-  const maxPagesToScan = 15;
+  // 1. Fetch latest conversations from NXLINK Flow Manager (Page 1)
+  const convResp = await fetch('https://app.nxlink.ai/admin/nx_flow_manager/conversation', {
+    method: 'POST',
+    headers: { authorization: token, 'content-type': 'application/json' },
+    body: JSON.stringify({ phone: null, tags: [], page_number: 1, page_size: 50, timeZone: 'UTC+08:00' })
+  });
 
-  for (let pageNum = 1; pageNum <= maxPagesToScan; pageNum++) {
-    const convResp = await fetch('https://app.nxlink.ai/admin/nx_flow_manager/conversation', {
-      method: 'POST',
-      headers: { authorization: token, 'content-type': 'application/json' },
-      body: JSON.stringify({ phone: null, tags: [], page_number: pageNum, page_size: 100, timeZone: 'UTC+08:00' })
-    });
+  if (!convResp.ok) {
+    throw new Error(`Failed to fetch conversations from NXLINK (HTTP ${convResp.status})`);
+  }
 
-    if (!convResp.ok) break;
+  const rawText = await convResp.text();
+  let convData: any = {};
+  try {
+    convData = JSON.parse(rawText);
+  } catch (e) {
+    throw new Error(`Non-JSON response received from NXLINK conversation list: ${rawText.slice(0, 150)}`);
+  }
 
-    const rawText = await convResp.text();
-    let convData: any = {};
-    try {
-      convData = JSON.parse(rawText);
-    } catch (e) {
-      console.warn(`[Sync] Non-JSON response received on page ${pageNum}:`, rawText.slice(0, 150));
-      break;
-    }
+  const pageList = convData.list || convData.data?.list || convData.data || [];
+  if (!Array.isArray(pageList) || pageList.length === 0) {
+    return { success: true, syncedCount: 0, webhookPushedCount: 0, totalChecked: 0 };
+  }
 
-    const pageList = convData.list || convData.data?.list || convData.data || [];
-    if (!Array.isArray(pageList) || pageList.length === 0) break;
+  // 2. Fetch existing records in ONE single Supabase subrequest
+  const { data: recentRows } = await supabase
+    .from('conversations')
+    .select('id, customer_name, conversation_summary, conversation_tags, channel, preferred_branch, preferred_date, conversation_transcript')
+    .order('created_at', { ascending: false })
+    .limit(300);
 
-    conversations.push(...pageList);
-
-    let unSyncedCount = 0;
-    for (const c of pageList) {
-      const cid = c.id || c.conversationId || c.uuid;
-      if (!cid) continue;
-      const { data: existing } = await supabase
-        .from('conversations')
-        .select('id')
-        .ilike('conversation_transcript', `%nxlink_id:${cid}%`)
-        .limit(1);
-      if (!existing || existing.length === 0) {
-        unSyncedCount++;
+  const existingMap = new Map<string, any>();
+  if (Array.isArray(recentRows)) {
+    for (const row of recentRows) {
+      const match = row.conversation_transcript?.match(/\[nxlink_id:([^\]]+)\]/);
+      if (match && match[1]) {
+        existingMap.set(match[1], row);
       }
     }
-    if (unSyncedCount === 0) {
-      consecutiveAlreadySyncedPages++;
-      if (consecutiveAlreadySyncedPages >= 2) break;
-    } else {
-      consecutiveAlreadySyncedPages = 0;
+  }
+
+  // 3. Identify items that need sync or update
+  const itemsToProcess: { conv: any; existingRow: any | null }[] = [];
+
+  for (const conv of pageList) {
+    const convId = conv.id || conv.conversationId || conv.uuid;
+    if (!convId) continue;
+
+    const existingRow = existingMap.get(String(convId)) || null;
+    const channelName = resolveChannel(conv);
+
+    let tagsList: string[] = [];
+    if (Array.isArray(conv.tags)) {
+      tagsList = conv.tags.map((t: any) => (typeof t === 'string' ? t : t.name)).filter(Boolean);
     }
 
-    if (pageList.length < 100) break;
+    if (!existingRow) {
+      itemsToProcess.push({ conv, existingRow: null });
+    } else {
+      const tagsChanged = tagsList.length > 0 && JSON.stringify(existingRow.conversation_tags || []) !== JSON.stringify(tagsList);
+      const branchMissing = !existingRow.preferred_branch;
+      const channelChanged = existingRow.channel !== channelName;
+      const incomplete = !existingRow.customer_name || !existingRow.conversation_summary || !existingRow.channel;
+
+      if (incomplete || tagsChanged || branchMissing || channelChanged) {
+        itemsToProcess.push({ conv, existingRow });
+      }
+    }
   }
+
+  // 4. Cloudflare subrequest safety:
+  // Limit to at most 10 conversations per cron invocation so total subrequests stay under 35 (Cloudflare limit is 50).
+  const batch = itemsToProcess.slice(0, 10);
 
   let syncedCount = 0;
   let webhookPushedCount = 0;
 
-  for (const conv of conversations) {
+  for (const { conv, existingRow } of batch) {
     const convId = conv.id || conv.conversationId || conv.uuid;
-    if (!convId) continue;
-
     const channelName = resolveChannel(conv);
-
-    const { data: existing } = await supabase
-      .from('conversations')
-      .select('id, customer_name, conversation_summary, conversation_tags, channel, preferred_branch, preferred_date')
-      .ilike('conversation_transcript', `%nxlink_id:${convId}%`)
-      .limit(1);
 
     const msgResp = await fetch(
       `https://app.nxlink.ai/admin/nx_flow_manager/conversation/messages?pageSize=9999&pageNumber=1&conversationId=${convId}`,
@@ -290,6 +315,7 @@ export async function runNxlinkSync(env: Env) {
         console.warn(`[Sync] Non-JSON response for conversation messages ID ${convId}`);
       }
     }
+
     const meta = extractSummaryMetadata(messages, conv);
 
     let tagsList: string[] = [];
@@ -336,30 +362,26 @@ export async function runNxlinkSync(env: Env) {
 
     let wasIngestedOrUpdated = false;
 
-    if (existing && existing.length > 0) {
-      const row = existing[0];
-      const tagsChanged = tagsList.length > 0 && JSON.stringify(row.conversation_tags || []) !== JSON.stringify(tagsList);
-      const branchMissing = (!row.preferred_branch && meta.preferred_branch);
-      if (!row.customer_name || !row.conversation_summary || tagsChanged || !row.channel || branchMissing) {
-        await supabase
-          .from('conversations')
-          .update({
-            customer_name: meta.customer_name,
-            phone_number: meta.phone_number,
-            customer_sentiment: meta.customer_sentiment,
-            conversation_summary: meta.conversation_summary,
-            next_steps: meta.next_steps,
-            preferred_branch: meta.preferred_branch,
-            preferred_date: meta.preferred_date,
-            conversation_tags: tagsList,
-            conversation_date: cDateStr,
-            conversation_time: cTimeStr,
-            call_audio_url: callAudioUrl,
-            channel: channelName
-          })
-          .eq('id', row.id);
-        wasIngestedOrUpdated = true;
-      }
+    if (existingRow) {
+      await supabase
+        .from('conversations')
+        .update({
+          customer_name: meta.customer_name,
+          phone_number: meta.phone_number,
+          customer_sentiment: meta.customer_sentiment,
+          conversation_summary: meta.conversation_summary,
+          next_steps: meta.next_steps,
+          preferred_branch: meta.preferred_branch,
+          preferred_date: meta.preferred_date,
+          conversation_tags: tagsList,
+          conversation_date: cDateStr,
+          conversation_time: cTimeStr,
+          call_audio_url: callAudioUrl,
+          channel: channelName
+        })
+        .eq('id', existingRow.id);
+      wasIngestedOrUpdated = true;
+      syncedCount++;
     } else {
       const { error } = await supabase.from('conversations').insert([
         {
@@ -426,7 +448,7 @@ export async function runNxlinkSync(env: Env) {
     success: true,
     syncedCount,
     webhookPushedCount,
-    totalChecked: conversations.length
+    totalChecked: pageList.length
   };
 }
 

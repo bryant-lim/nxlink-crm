@@ -389,7 +389,7 @@ export default function Dashboard() {
     setNxlinkSyncing(true);
     setWebhookStatus(null);
     try {
-      const resp = await fetch('/.netlify/functions/sync-nxlink');
+      const resp = await fetch('/api/sync-nxlink');
       if (resp.ok) {
         const data = await resp.json();
         const msg = data.syncedCount > 0

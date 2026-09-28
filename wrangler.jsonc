@@ -17,6 +17,7 @@
   },
   "vars": {
     "SUPABASE_URL": "https://khwyzlhthadyyixjuhgb.supabase.co",
+    "SUPABASE_SERVICE_ROLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtod3l6bGh0aGFkeXlpeGp1aGdiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NDI4NjkzNywiZXhwIjoyMDk5ODYyOTM3fQ.Mw_dOwfsE0GfMtdAooa6JaevvgGH004VKzHEh3Erltg",
     "VITE_SUPABASE_URL": "https://khwyzlhthadyyixjuhgb.supabase.co",
     "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtod3l6bGh0aGFkeXlpeGp1aGdiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyODY5MzcsImV4cCI6MjA5OTg2MjkzN30.VG1GQpHX-SWGmS3yEc7BrnnGFPu0s59CElqd0yMUiBY",
     "NXLINK_WEBHOOK_URL": "https://tjpb33b2kqps.jp.larksuite.com/base/automation/webhook/event/Yo5XaWnyOwl0qzhG8qpjL4cHp9f",
