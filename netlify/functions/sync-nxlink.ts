@@ -8,6 +8,8 @@ function extractSummaryMetadata(messages: any[], conv: any) {
   let nextSteps: string | null = null;
   let extractedName: string | null = null;
   let extractedPhone: string | null = null;
+  let extractedBranch: string | null = null;
+  let extractedDate: string | null = null;
 
   const parseSummaryText = (text: string) => {
     if (!text) return;
@@ -25,9 +27,19 @@ function extractSummaryMetadata(messages: any[], conv: any) {
       extractedName = nMatch[1].trim();
     }
 
-    const pMatch = text.match(/Phone Number:\s*(.*)/i);
+    const pMatch = text.match(/Phone Number:\s*(.*?)(?=\s*Preferred Branch:|\s*Preferred Date:|$)/i);
     if (pMatch && pMatch[1].trim() && pMatch[1].trim().toLowerCase() !== 'n/a' && !extractedPhone) {
       extractedPhone = pMatch[1].trim();
+    }
+
+    const bMatch = text.match(/Preferred Branch:\s*(.*?)(?=\s*Preferred Date:|$)/i);
+    if (bMatch && bMatch[1].trim() && bMatch[1].trim().toLowerCase() !== 'n/a' && !extractedBranch) {
+      extractedBranch = bMatch[1].trim();
+    }
+
+    const dMatch = text.match(/Preferred Date:\s*(.*?)(?=$)/i);
+    if (dMatch && dMatch[1].trim() && dMatch[1].trim().toLowerCase() !== 'n/a' && !extractedDate) {
+      extractedDate = dMatch[1].trim();
     }
   };
 
@@ -56,19 +68,32 @@ function extractSummaryMetadata(messages: any[], conv: any) {
   const cleanField = (val: string | null) => {
     if (!val) return null;
     let s = val.split(/\[nxlink_id:/i)[0].trim();
-    s = s.replace(/Customer Name:.*$/is, '').replace(/Phone Number:.*$/is, '').replace(/["}'\\\}\],]+$/g, '').trim();
+    s = s
+      .replace(/(?:Customer Name|Phone Number|Preferred Branch|Preferred Date):.*$/is, '')
+      .replace(/["}'\\\}\],]+$/g, '')
+      .trim();
     return s.length > 0 ? s : null;
+  };
+
+  const cleanShortField = (val: string | null) => {
+    const s = cleanField(val);
+    if (!s) return null;
+    return s.replace(/\.+$/, '').trim() || null;
   };
 
   const finalName = extractedName || conv.customer_name || conv.customerName || null;
   const finalPhone = extractedPhone || conv.customer_phone || conv.phone || null;
+  const finalBranch = extractedBranch || conv.preferred_branch || conv.preferredBranch || null;
+  const finalDate = extractedDate || conv.preferred_date || conv.preferredDate || null;
 
   return {
     customer_sentiment: cleanField(sentiment),
     conversation_summary: cleanField(summary),
     next_steps: cleanField(nextSteps),
-    customer_name: cleanField(finalName),
-    phone_number: cleanField(finalPhone)
+    customer_name: cleanShortField(finalName),
+    phone_number: cleanShortField(finalPhone),
+    preferred_branch: cleanShortField(finalBranch),
+    preferred_date: cleanShortField(finalDate)
   };
 }
 
@@ -202,7 +227,7 @@ const syncNxlinkHandler: Handler = async () => {
 
       const { data: existing } = await supabase
         .from('conversations')
-        .select('id, customer_name, conversation_summary, conversation_tags')
+        .select('id, customer_name, conversation_summary, conversation_tags, preferred_branch, preferred_date')
         .ilike('conversation_transcript', `%nxlink_id:${convId}%`)
         .limit(1);
 
@@ -255,13 +280,16 @@ const syncNxlinkHandler: Handler = async () => {
       if (existing && existing.length > 0) {
         const row = existing[0];
         const tagsChanged = tagsList.length > 0 && JSON.stringify(row.conversation_tags || []) !== JSON.stringify(tagsList);
-        if (!row.customer_name || !row.conversation_summary || tagsChanged) {
+        const branchMissing = (!row.preferred_branch && meta.preferred_branch);
+        if (!row.customer_name || !row.conversation_summary || tagsChanged || branchMissing) {
           await supabase.from('conversations').update({
             customer_name: meta.customer_name,
             phone_number: meta.phone_number,
             customer_sentiment: meta.customer_sentiment,
             conversation_summary: meta.conversation_summary,
             next_steps: meta.next_steps,
+            preferred_branch: meta.preferred_branch,
+            preferred_date: meta.preferred_date,
             conversation_tags: tagsList,
             conversation_date: cDateStr,
             conversation_time: cTimeStr,
@@ -276,6 +304,8 @@ const syncNxlinkHandler: Handler = async () => {
           customer_sentiment: meta.customer_sentiment,
           conversation_summary: meta.conversation_summary,
           next_steps: meta.next_steps,
+          preferred_branch: meta.preferred_branch,
+          preferred_date: meta.preferred_date,
           company_name: conv.company_name || null,
           email_address: conv.email_address || null,
           conversation_tags: tagsList,
@@ -312,6 +342,8 @@ const syncNxlinkHandler: Handler = async () => {
                   "Full Summary": meta.conversation_summary || null,
                   "Sentiment": meta.customer_sentiment || 'Neutral',
                   "Next Steps": meta.next_steps || null,
+                  "Preferred Branch": meta.preferred_branch || null,
+                  "Preferred Date": meta.preferred_date || null,
                   "Call Audio URL": callAudioUrl,
                   "Conversation Date": cDateStr
                 }

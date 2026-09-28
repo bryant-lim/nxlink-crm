@@ -37,6 +37,8 @@ interface Conversation {
   conversation_tags: string[];
   conversation_transcript: string;
   next_steps: string;
+  preferred_branch?: string | null;
+  preferred_date?: string | null;
   call_audio_url?: string;
   webhook_status?: 'synced' | 'not_synced' | 'failed' | null;
   webhook_error?: string | null;
@@ -230,7 +232,9 @@ export default function Dashboard() {
           "Tags": c.conversation_tags,
           "Full Summary": c.conversation_summary || null,
           "Sentiment": c.customer_sentiment || 'Neutral',
-          "Next Steps": c.next_steps || null
+          "Next Steps": c.next_steps || null,
+          "Preferred Branch": c.preferred_branch || null,
+          "Preferred Date": c.preferred_date || null
         }
       };
 
@@ -844,7 +848,7 @@ export default function Dashboard() {
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading">
                     Customer Details
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs font-heading">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs font-heading">
                     <div>
                       <span className="text-slate-400 font-semibold uppercase text-[10px] block">Customer Name</span>
                       <span className="font-bold text-slate-900 text-sm">{selectedConvo.customer_name || 'Unknown'}</span>
@@ -852,6 +856,14 @@ export default function Dashboard() {
                     <div>
                       <span className="text-slate-400 font-semibold uppercase text-[10px] block">Phone Number</span>
                       <span className="font-bold text-slate-800 font-mono">{selectedConvo.phone_number || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold uppercase text-[10px] block">Preferred Branch</span>
+                      <span className="font-bold text-slate-800">{selectedConvo.preferred_branch || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold uppercase text-[10px] block">Preferred Date</span>
+                      <span className="font-bold text-slate-800 font-mono">{selectedConvo.preferred_date || 'N/A'}</span>
                     </div>
                     <div>
                       <span className="text-slate-400 font-semibold uppercase text-[10px] block">Channel</span>

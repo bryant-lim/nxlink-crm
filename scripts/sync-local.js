@@ -95,6 +95,8 @@ function extractSummaryMetadata(messages, conv) {
   let nextSteps = null;
   let extractedName = null;
   let extractedPhone = null;
+  let extractedBranch = null;
+  let extractedDate = null;
 
   if (Array.isArray(messages)) {
     for (const m of messages) {
@@ -111,20 +113,24 @@ function extractSummaryMetadata(messages, conv) {
         if (parsed && parsed.summarize) {
           const sumText = parsed.summarize;
 
-          const sentMatch = sumText.match(/Customer Sentiment:\s*([^\r\n]+?)(?=\s*(?:Conversation Summary|Next Steps|Follow-up Suggestions|Follow Up Suggestions|Customer Name|Phone Number)|$)/i);
-          const summMatch = sumText.match(/Conversation Summary:\s*([^\r\n]+?)(?=\s*(?:Next Steps|Follow-up Suggestions|Follow Up Suggestions|Customer Name|Phone Number)|$)/i);
-          const stepsMatch = sumText.match(/(?:Next Steps|Follow-up Suggestions|Follow Up Suggestions):\s*([^\r\n]+?)(?=\s*(?:Customer Name|Phone Number)|$)/i);
+          const sentMatch = sumText.match(/Customer Sentiment:\s*([^\r\n]+?)(?=\s*(?:Conversation Summary|Next Steps|Follow-up Suggestions|Follow Up Suggestions|Customer Name|Phone Number|Preferred Branch|Preferred Date)|$)/i);
+          const summMatch = sumText.match(/Conversation Summary:\s*([^\r\n]+?)(?=\s*(?:Next Steps|Follow-up Suggestions|Follow Up Suggestions|Customer Name|Phone Number|Preferred Branch|Preferred Date)|$)/i);
+          const stepsMatch = sumText.match(/(?:Next Steps|Follow-up Suggestions|Follow Up Suggestions):\s*([^\r\n]+?)(?=\s*(?:Customer Name|Phone Number|Preferred Branch|Preferred Date)|$)/i);
           const nameMatch = sumText.match(/Customer Name:\s*([^\.\r\n]+)/i);
-          const phoneMatch = sumText.match(/(?:Phone Number|Phone):\s*(0\d{8,10})/i);
+          const phoneMatch = sumText.match(/(?:Phone Number|Phone):\s*(.*?)(?=\s*(?:Preferred Branch|Preferred Date)|$)/i);
+          const branchMatch = sumText.match(/Preferred Branch:\s*(.*?)(?=\s*Preferred Date:|$)/i);
+          const dateMatch = sumText.match(/Preferred Date:\s*(.*?)(?=$)/i);
 
           if (sentMatch && sentMatch[1]) sentiment = sentMatch[1].trim();
           if (summMatch && summMatch[1]) summary = summMatch[1].trim();
           if (stepsMatch && stepsMatch[1]) nextSteps = stepsMatch[1].trim();
           if (nameMatch && nameMatch[1]) extractedName = nameMatch[1].trim();
           if (phoneMatch && phoneMatch[1]) extractedPhone = phoneMatch[1].trim();
+          if (branchMatch && branchMatch[1]) extractedBranch = branchMatch[1].trim();
+          if (dateMatch && dateMatch[1]) extractedDate = dateMatch[1].trim();
 
           if (!summary && !sumText.includes('Conversation Summary:')) {
-            summary = sumText.replace(/(?:Follow-up Suggestions|Follow Up Suggestions|Next Steps|Customer Name|Phone Number):.*$/is, '').trim();
+            summary = sumText.replace(/(?:Follow-up Suggestions|Follow Up Suggestions|Next Steps|Customer Name|Phone Number|Preferred Branch|Preferred Date):.*$/is, '').trim();
           }
         }
       }
@@ -139,16 +145,24 @@ function extractSummaryMetadata(messages, conv) {
   const cleanField = (val) => {
     if (!val) return null;
     let s = val.split(/\[nxlink_id:/i)[0].trim();
-    s = s.replace(/Customer Name:.*$/is, '').replace(/Phone Number:.*$/is, '').replace(/["}'\\\}\],]+$/g, '').trim();
+    s = s.replace(/(?:Customer Name|Phone Number|Preferred Branch|Preferred Date):.*$/is, '').replace(/["}'\\\}\],]+$/g, '').trim();
     return s.length > 0 ? s : null;
+  };
+
+  const cleanShort = (val) => {
+    const s = cleanField(val);
+    if (!s) return null;
+    return s.replace(/\.+$/, '').trim() || null;
   };
 
   return {
     sentiment: cleanField(sentiment),
     summary: cleanField(summary),
     nextSteps: cleanField(nextSteps),
-    extractedName: cleanField(extractedName),
-    extractedPhone: cleanField(extractedPhone)
+    extractedName: cleanShort(extractedName),
+    extractedPhone: cleanShort(extractedPhone),
+    extractedBranch: cleanShort(extractedBranch),
+    extractedDate: cleanShort(extractedDate)
   };
 }
 
@@ -347,7 +361,7 @@ async function main() {
     }
 
     // Extract sentiment, summary, next steps structured metadata
-    const { sentiment, summary, nextSteps, extractedName, extractedPhone } = extractSummaryMetadata(messages, conv);
+    const { sentiment, summary, nextSteps, extractedName, extractedPhone, extractedBranch, extractedDate } = extractSummaryMetadata(messages, conv);
 
     // Date formatting (NXLINK created_at timestamp)
     let convDate = new Date().toISOString().split('T')[0];
@@ -415,6 +429,8 @@ async function main() {
         company_name: conv.company_name || null,
         conversation_summary: cleanSummary || 'AI Bot Consultation',
         next_steps: nextSteps || null,
+        preferred_branch: extractedBranch || null,
+        preferred_date: extractedDate || null,
         conversation_date: convDate,
         conversation_time: convTime,
         conversation_tags: tagsList.length > 0 ? tagsList : null,
@@ -447,7 +463,9 @@ async function main() {
               "Tags": tagsList,
               "Full Summary": cleanSummary || null,
               "Sentiment": sentiment || 'Neutral',
-              "Next Steps": nextSteps || null
+              "Next Steps": nextSteps || null,
+              "Preferred Branch": extractedBranch || null,
+              "Preferred Date": extractedDate || null
             }
           };
 

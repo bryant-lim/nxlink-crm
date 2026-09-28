@@ -101,6 +101,8 @@ function netlifyFunctionsDevPlugin(): Plugin {
               let nextSteps: string | null = null;
               let extractedName: string | null = null;
               let extractedPhone: string | null = null;
+              let extractedBranch: string | null = null;
+              let extractedDate: string | null = null;
 
               for (const m of messages) {
                 if (m && m.msgType === 64 && m.msgInfo) {
@@ -129,16 +131,34 @@ function netlifyFunctionsDevPlugin(): Plugin {
                       extractedName = nMatch[1].trim();
                     }
 
-                    const pMatch = text.match(/Phone Number:\s*(.*)/i);
+                    const pMatch = text.match(/Phone Number:\s*(.*?)(?=\s*Preferred Branch:|\s*Preferred Date:|$)/i);
                     if (pMatch && pMatch[1].trim() && pMatch[1].trim().toLowerCase() !== 'n/a') {
                       extractedPhone = pMatch[1].trim();
+                    }
+
+                    const bMatch = text.match(/Preferred Branch:\s*(.*?)(?=\s*Preferred Date:|$)/i);
+                    if (bMatch && bMatch[1].trim() && bMatch[1].trim().toLowerCase() !== 'n/a') {
+                      extractedBranch = bMatch[1].trim();
+                    }
+
+                    const dMatch = text.match(/Preferred Date:\s*(.*?)(?=$)/i);
+                    if (dMatch && dMatch[1].trim() && dMatch[1].trim().toLowerCase() !== 'n/a') {
+                      extractedDate = dMatch[1].trim();
                     }
                   }
                 }
               }
 
-              const finalName = extractedName || conv.customer_name || conv.customerName || null;
-              const finalPhone = extractedPhone || conv.customer_phone || conv.phone || null;
+              const cleanShort = (val: string | null) => {
+                if (!val) return null;
+                const s = val.replace(/\.+$/, '').trim();
+                return s.toLowerCase() === 'n/a' || s.length === 0 ? null : s;
+              };
+
+              const finalName = cleanShort(extractedName || conv.customer_name || conv.customerName || null);
+              const finalPhone = cleanShort(extractedPhone || conv.customer_phone || conv.phone || null);
+              const finalBranch = cleanShort(extractedBranch || conv.preferred_branch || conv.preferredBranch || null);
+              const finalDate = cleanShort(extractedDate || conv.preferred_date || conv.preferredDate || null);
 
               let tagsList: string[] = [];
               if (Array.isArray(conv.tags)) {
@@ -161,7 +181,7 @@ function netlifyFunctionsDevPlugin(): Plugin {
 
               const { data: existing } = await supabase
                 .from('conversations')
-                .select('id, customer_name, conversation_summary, conversation_tags')
+                .select('id, customer_name, conversation_summary, conversation_tags, preferred_branch, preferred_date')
                 .ilike('conversation_transcript', `%nxlink_id:${convId}%`)
                 .limit(1);
 
@@ -170,13 +190,16 @@ function netlifyFunctionsDevPlugin(): Plugin {
               if (existing && existing.length > 0) {
                 const row = existing[0];
                 const tagsChanged = tagsList.length > 0 && JSON.stringify(row.conversation_tags || []) !== JSON.stringify(tagsList);
-                if (!row.customer_name || !row.conversation_summary || tagsChanged) {
+                const branchMissing = (!row.preferred_branch && finalBranch);
+                if (!row.customer_name || !row.conversation_summary || tagsChanged || branchMissing) {
                   await supabase.from('conversations').update({
                     customer_name: finalName,
                     phone_number: finalPhone,
                     customer_sentiment: sentiment,
                     conversation_summary: summary,
                     next_steps: nextSteps,
+                    preferred_branch: finalBranch,
+                    preferred_date: finalDate,
                     conversation_tags: tagsList,
                     call_audio_url: callAudioUrl
                   }).eq('id', row.id);
@@ -189,6 +212,8 @@ function netlifyFunctionsDevPlugin(): Plugin {
                   customer_sentiment: sentiment,
                   conversation_summary: summary,
                   next_steps: nextSteps,
+                  preferred_branch: finalBranch,
+                  preferred_date: finalDate,
                   company_name: conv.company_name || null,
                   email_address: conv.email_address || null,
                   conversation_tags: tagsList,
@@ -231,6 +256,8 @@ function netlifyFunctionsDevPlugin(): Plugin {
                           "Full Summary": summary || null,
                           "Sentiment": sentiment || 'Neutral',
                           "Next Steps": nextSteps || null,
+                          "Preferred Branch": finalBranch || null,
+                          "Preferred Date": finalDate || null,
                           "Call Audio URL": callAudioUrl,
                           "Conversation Date": new Date().toISOString().split('T')[0]
                         }

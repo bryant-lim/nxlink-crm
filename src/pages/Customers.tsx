@@ -380,7 +380,7 @@ export default function Customers() {
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading">
                   Customer Details
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-heading">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs font-heading">
                   <div>
                     <span className="text-slate-400 font-semibold uppercase text-[10px] block">Customer Name</span>
                     <span className="font-bold text-slate-900 text-sm">{selectedDetailConvo.customer_name || 'Unknown'}</span>
@@ -388,6 +388,14 @@ export default function Customers() {
                   <div>
                     <span className="text-slate-400 font-semibold uppercase text-[10px] block">Phone Number</span>
                     <span className="font-bold text-slate-800 font-mono">{selectedDetailConvo.phone_number || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-semibold uppercase text-[10px] block">Preferred Branch</span>
+                    <span className="font-bold text-slate-800">{selectedDetailConvo.preferred_branch || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-semibold uppercase text-[10px] block">Preferred Date</span>
+                    <span className="font-bold text-slate-800 font-mono">{selectedDetailConvo.preferred_date || 'N/A'}</span>
                   </div>
                   <div>
                     <span className="text-slate-400 font-semibold uppercase text-[10px] block">Company Name</span>

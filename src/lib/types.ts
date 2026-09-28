@@ -11,6 +11,9 @@ export interface ConversationData {
   conversation_tags?: string[] | null;
   conversation_transcript?: string | null;
   next_steps?: string | null;
+  preferred_branch?: string | null;
+  preferred_date?: string | null;
+  channel?: string | null;
   call_audio_url?: string | null;
   webhook_status?: 'synced' | 'not_synced' | 'failed' | null;
   webhook_error?: string | null;

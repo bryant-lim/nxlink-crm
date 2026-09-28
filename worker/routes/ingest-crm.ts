@@ -68,6 +68,12 @@ export async function handleIngestCrm(request: Request, env: Env): Promise<Respo
       });
     }
 
+    const cleanShort = (val: string | null) => {
+      if (!val) return null;
+      let s = val.replace(/\.+$/, '').trim();
+      return s.toLowerCase() === 'null' || s.toLowerCase() === 'n/a' || s.length === 0 ? null : s;
+    };
+
     const extractedData = {
       customer_sentiment: extractField(rawText, 'Customer Sentiment:'),
       conversation_summary: extractField(rawText, 'Conversation Summary:'),
@@ -75,14 +81,14 @@ export async function handleIngestCrm(request: Request, env: Env): Promise<Respo
       company_name: extractField(rawText, 'Company Name:'),
       email_address: extractField(rawText, 'Email Address:'),
       tags_string: extractField(rawText, 'Conversation Tag:'),
-      customer_name: extractField(rawText, 'Customer Name:'),
-      phone_number: extractField(rawText, 'Phone Number:')
+      customer_name: cleanShort(extractField(rawText, 'Customer Name:')),
+      phone_number: cleanShort(extractField(rawText, 'Phone Number:')),
+      preferred_branch: cleanShort(extractField(rawText, 'Preferred Branch:')),
+      preferred_date: cleanShort(extractField(rawText, 'Preferred Date:'))
     };
 
     if (extractedData.company_name?.toLowerCase() === 'null') extractedData.company_name = null;
     if (extractedData.email_address?.toLowerCase() === 'null') extractedData.email_address = null;
-    if (extractedData.customer_name?.toLowerCase() === 'null') extractedData.customer_name = null;
-    if (extractedData.phone_number?.toLowerCase() === 'null') extractedData.phone_number = null;
 
     let conversation_tags: string[] | null = null;
     if (extractedData.tags_string && extractedData.tags_string.toLowerCase() !== 'null') {
@@ -138,6 +144,8 @@ export async function handleIngestCrm(request: Request, env: Env): Promise<Respo
           customer_sentiment: extractedData.customer_sentiment,
           conversation_summary: extractedData.conversation_summary,
           next_steps: extractedData.next_steps,
+          preferred_branch: extractedData.preferred_branch,
+          preferred_date: extractedData.preferred_date,
           company_name: extractedData.company_name,
           email_address: extractedData.email_address,
           conversation_tags: conversation_tags,
@@ -214,7 +222,9 @@ function extractField(text: string, label: string): string | null {
     'Email Address:',
     'Conversation Tag:',
     'Customer Name:',
-    'Phone Number:'
+    'Phone Number:',
+    'Preferred Branch:',
+    'Preferred Date:'
   ];
 
   const startIndex = text.indexOf(label);
