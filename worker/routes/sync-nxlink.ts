@@ -120,42 +120,20 @@ function shouldSyncToWebhook(tags: any[]) {
 function resolveChannel(conv: any): string {
   const sourceChannel = conv.source_channel || conv.sourceChannel;
   const instance = (conv.channel_instance || conv.channelInstance || '').toLowerCase();
-  const bizPhone = (conv.business_phone || conv.businessPhone || '').toLowerCase();
 
-  // Webchat checks first, because both Webchat and WhatsApp flow bots share sourceChannel === 18
-  if (
-    instance.includes('web') ||
-    instance.includes('demo') ||
-    instance.includes('livechat') ||
-    instance.includes('chatbot') ||
-    bizPhone.startsWith('chatbot')
-  ) {
-    return 'Webchat';
-  }
-
-  if (sourceChannel === 18 || instance.includes('whatsapp') || instance.includes('wa')) {
+  // Explicit channel markers
+  if (instance.includes('whatsapp') || instance.includes('wa')) {
     return 'Whatsapp';
   }
-  if (instance.includes('messenger') || instance.includes('fb') || instance.includes('facebook')) {
+  if (instance.includes('messenger') || instance.includes('fb') || instance.includes('facebook') || sourceChannel === 19) {
     return 'Messenger';
   }
-  if (instance.includes('instagram') || instance.includes('ig')) {
+  if (instance.includes('instagram') || instance.includes('ig') || sourceChannel === 20) {
     return 'Instagram';
   }
 
-  switch (sourceChannel) {
-    case 1:
-    case 2:
-      return 'Webchat';
-    case 18:
-      return 'Whatsapp';
-    case 19:
-      return 'Messenger';
-    case 20:
-      return 'Instagram';
-    default:
-      return conv.channel_instance || 'Webchat';
-  }
+  // All other Flow Manager bot sessions (Dental Home web widget, demo, etc.) are Webchat
+  return 'Webchat';
 }
 
 export async function runNxlinkSync(env: Env) {
