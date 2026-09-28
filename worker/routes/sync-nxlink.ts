@@ -92,6 +92,38 @@ function shouldSyncToWebhook(tags: any[]) {
   return lowerTags.some((t) => t.includes('hot lead') || t.includes('warm lead') || t.includes('booking appointment'));
 }
 
+function resolveChannel(conv: any): string {
+  const sourceChannel = conv.source_channel || conv.sourceChannel;
+  const instance = (conv.channel_instance || conv.channelInstance || '').toLowerCase();
+
+  if (sourceChannel === 18 || instance.includes('whatsapp') || instance.includes('wa')) {
+    return 'Whatsapp';
+  }
+  if (instance.includes('web') || instance.includes('livechat')) {
+    return 'Webchat';
+  }
+  if (instance.includes('messenger') || instance.includes('fb') || instance.includes('facebook')) {
+    return 'Messenger';
+  }
+  if (instance.includes('instagram') || instance.includes('ig')) {
+    return 'Instagram';
+  }
+
+  switch (sourceChannel) {
+    case 1:
+    case 2:
+      return 'Webchat';
+    case 18:
+      return 'Whatsapp';
+    case 19:
+      return 'Messenger';
+    case 20:
+      return 'Instagram';
+    default:
+      return conv.channel_instance || 'Whatsapp';
+  }
+}
+
 export async function runNxlinkSync(env: Env) {
   const supabaseUrl = env.SUPABASE_URL || env.VITE_SUPABASE_URL;
   const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY || env.VITE_SUPABASE_ANON_KEY;
@@ -124,6 +156,35 @@ export async function runNxlinkSync(env: Env) {
     token = 'eyJhbGciOiJIUzI1NiJ9.eyJ1SWQiOjU3OTk0LCJkZXZpY2VVbmlxdWVJZGVudGlmaWNhdGlvbiI6IjQxOTNlYjUwLWJhZWItMTFmMS04NWI5LTgxOTNmODA2MGY2MSIsInV1SWQiOiI2YWI5ZGM3Y2U0YjA3YTQ1ZjQ0MDQ1ODYifQ.BidmK5Cfd2SGlfej8l7QsgV5eCkjph8X_YoTPFtan8E';
   }
 
+  // Hard guard: verify active session belongs strictly to Tenant 4600
+  const tenantCheckResp = await fetch('https://app.nxlink.ai/gw/v1/omni/admin/tenants', {
+    headers: { authorization: token }
+  });
+  if (tenantCheckResp.ok) {
+    const tCheckData: any = await tenantCheckResp.json();
+    const activeTenantId = tCheckData.data?.tenant_id;
+    if (activeTenantId !== 4600) {
+      throw new Error(`Tenant safety violation: Active token tenant is ${activeTenantId}, expected 4600. Aborting sync.`);
+    }
+  } else {
+    throw new Error(`Failed to verify tenant with NXLINK API (HTTP ${tenantCheckResp.status}). Aborting sync.`);
+  }
+
+  // Fetch dynamic Webhook URL from app_settings with fallback to env
+  let dynamicWebhookUrl = env.NXLINK_WEBHOOK_URL || 'https://asia-east1-lark-demo-67aa3.cloudfunctions.net/nxlinkWebhook';
+  try {
+    const { data: settingRow } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'nxlink_webhook_url')
+      .single();
+    if (settingRow?.value?.trim()) {
+      dynamicWebhookUrl = settingRow.value.trim();
+    }
+  } catch (e) {
+    console.warn('Failed to load webhook URL from app_settings, using fallback');
+  }
+
   let conversations: any[] = [];
   let consecutiveAlreadySyncedPages = 0;
   const maxPagesToScan = 15;
@@ -151,29 +212,24 @@ export async function runNxlinkSync(env: Env) {
 
     conversations.push(...pageList);
 
-    const dhRecords = pageList.filter((c: any) =>
-      (c.auto_flow_name || c.autoFlowName || '').toLowerCase().includes('dentalhome')
-    );
-    if (dhRecords.length > 0) {
-      let unSyncedCount = 0;
-      for (const c of dhRecords) {
-        const cid = c.id || c.conversationId || c.uuid;
-        if (!cid) continue;
-        const { data: existing } = await supabase
-          .from('conversations')
-          .select('id')
-          .ilike('conversation_transcript', `%nxlink_id:${cid}%`)
-          .limit(1);
-        if (!existing || existing.length === 0) {
-          unSyncedCount++;
-        }
+    let unSyncedCount = 0;
+    for (const c of pageList) {
+      const cid = c.id || c.conversationId || c.uuid;
+      if (!cid) continue;
+      const { data: existing } = await supabase
+        .from('conversations')
+        .select('id')
+        .ilike('conversation_transcript', `%nxlink_id:${cid}%`)
+        .limit(1);
+      if (!existing || existing.length === 0) {
+        unSyncedCount++;
       }
-      if (unSyncedCount === 0) {
-        consecutiveAlreadySyncedPages++;
-        if (consecutiveAlreadySyncedPages >= 2) break;
-      } else {
-        consecutiveAlreadySyncedPages = 0;
-      }
+    }
+    if (unSyncedCount === 0) {
+      consecutiveAlreadySyncedPages++;
+      if (consecutiveAlreadySyncedPages >= 2) break;
+    } else {
+      consecutiveAlreadySyncedPages = 0;
     }
 
     if (pageList.length < 100) break;
@@ -183,15 +239,14 @@ export async function runNxlinkSync(env: Env) {
   let webhookPushedCount = 0;
 
   for (const conv of conversations) {
-    const flowName = conv.auto_flow_name || conv.autoFlowName || '';
-    if (!flowName.toLowerCase().includes('dentalhome')) continue;
-
     const convId = conv.id || conv.conversationId || conv.uuid;
     if (!convId) continue;
 
+    const channelName = resolveChannel(conv);
+
     const { data: existing } = await supabase
       .from('conversations')
-      .select('id, customer_name, conversation_summary, conversation_tags')
+      .select('id, customer_name, conversation_summary, conversation_tags, channel')
       .ilike('conversation_transcript', `%nxlink_id:${convId}%`)
       .limit(1);
 
@@ -259,7 +314,7 @@ export async function runNxlinkSync(env: Env) {
     if (existing && existing.length > 0) {
       const row = existing[0];
       const tagsChanged = tagsList.length > 0 && JSON.stringify(row.conversation_tags || []) !== JSON.stringify(tagsList);
-      if (!row.customer_name || !row.conversation_summary || tagsChanged) {
+      if (!row.customer_name || !row.conversation_summary || tagsChanged || !row.channel) {
         await supabase
           .from('conversations')
           .update({
@@ -271,7 +326,8 @@ export async function runNxlinkSync(env: Env) {
             conversation_tags: tagsList,
             conversation_date: cDateStr,
             conversation_time: cTimeStr,
-            call_audio_url: callAudioUrl
+            call_audio_url: callAudioUrl,
+            channel: channelName
           })
           .eq('id', row.id);
         wasIngestedOrUpdated = true;
@@ -290,7 +346,8 @@ export async function runNxlinkSync(env: Env) {
           conversation_date: cDateStr,
           conversation_time: cTimeStr,
           conversation_transcript: rawTranscript,
-          call_audio_url: callAudioUrl
+          call_audio_url: callAudioUrl,
+          channel: channelName
         }
       ]);
 
@@ -301,13 +358,12 @@ export async function runNxlinkSync(env: Env) {
     }
 
     if (wasIngestedOrUpdated && shouldSyncToWebhook(tagsList)) {
-      const webhookUrl = env.NXLINK_WEBHOOK_URL || 'https://asia-east1-lark-demo-67aa3.cloudfunctions.net/nxlinkWebhook';
       const clientId = env.NXLINK_WEBHOOK_CLIENT_ID || 'nxw_41ef8e4dee35cd8e4c6c1d3e';
       const clientSecret = env.NXLINK_WEBHOOK_CLIENT_SECRET || '8ab7881cfcf9cd8428274ff2771875277c06be7404a3d4b20365bd584649ceea';
 
-      if (webhookUrl && clientId && clientSecret) {
+      if (dynamicWebhookUrl && clientId && clientSecret) {
         try {
-          const resp = await fetch(webhookUrl, {
+          const resp = await fetch(dynamicWebhookUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', client_id: clientId, client_secret: clientSecret },
             body: JSON.stringify({
@@ -322,7 +378,9 @@ export async function runNxlinkSync(env: Env) {
                 Sentiment: meta.customer_sentiment || 'Neutral',
                 'Next Steps': meta.next_steps || null,
                 'Call Audio URL': callAudioUrl,
-                'Conversation Date': cDateStr
+                'Conversation Date': cDateStr,
+                'Conversation Start Time': cTimeStr,
+                Channel: channelName
               }
             })
           });

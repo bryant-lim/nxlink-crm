@@ -11,7 +11,8 @@ import {
   X,
   PanelLeftClose,
   PanelLeftOpen,
-  Database
+  Database,
+  Settings
 } from 'lucide-react';
 
 export default function Layout() {
@@ -182,6 +183,24 @@ export default function Layout() {
               {!isCollapsed && <span className="font-heading">Database Metrics</span>}
             </div>
           </Link>
+
+          {/* App Setting (Admin Only) */}
+          {userRole === 'admin' && (
+            <Link
+              to="/app-settings"
+              className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'} py-2.5 rounded-lg text-sm font-medium transition-all ${
+                location.pathname === '/app-settings' 
+                  ? 'bg-slate-100 text-slate-900 font-semibold' 
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+              title={isCollapsed ? 'App Setting' : ''}
+            >
+              <div className="flex items-center space-x-3">
+                <Settings size={18} className={location.pathname === '/app-settings' ? 'text-emerald-600' : 'text-slate-400'} />
+                {!isCollapsed && <span className="font-heading">App Setting</span>}
+              </div>
+            </Link>
+          )}
         </nav>
 
         {/* User Profile & Sign Out */}
@@ -254,6 +273,13 @@ export default function Layout() {
               <Link to="/users" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50">
                 <UserCog size={20} className="text-slate-400" />
                 <span className="font-heading">User Management</span>
+              </Link>
+            )}
+
+            {userRole === 'admin' && (
+              <Link to="/app-settings" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50">
+                <Settings size={20} className="text-slate-400" />
+                <span className="font-heading">App Setting</span>
               </Link>
             )}
 

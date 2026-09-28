@@ -42,6 +42,7 @@ interface Conversation {
   webhook_error?: string | null;
   webhook_synced_at?: string | null;
   created_at: string;
+  channel?: string | null;
 }
 
 function getConvoId(c: Conversation): string {
@@ -199,8 +200,18 @@ export default function Dashboard() {
 
     let success = 0;
     let fail = 0;
+    let webhookUrl = 'https://asia-east1-lark-demo-67aa3.cloudfunctions.net/nxlinkWebhook';
+    try {
+      const { data: sRow } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'nxlink_webhook_url')
+        .single();
+      if (sRow?.value?.trim()) {
+        webhookUrl = sRow.value.trim();
+      }
+    } catch (e) {}
 
-    const webhookUrl = 'https://asia-east1-lark-demo-67aa3.cloudfunctions.net/nxlinkWebhook';
     const clientId = 'nxw_41ef8e4dee35cd8e4c6c1d3e';
     const clientSecret = '8ab7881cfcf9cd8428274ff2771875277c06be7404a3d4b20365bd584649ceea';
 
@@ -219,7 +230,9 @@ export default function Dashboard() {
           "Sentiment": c.customer_sentiment || 'Neutral',
           "Next Steps": c.next_steps || null,
           "Call Audio URL": c.call_audio_url || null,
-          "Conversation Date": c.conversation_date || null
+          "Conversation Date": c.conversation_date || null,
+          "Conversation Start Time": c.conversation_time || null,
+          "Channel": c.channel || 'Whatsapp'
         }
       };
 
@@ -625,6 +638,7 @@ export default function Dashboard() {
                     </th>
                     <th className="py-3 px-4">ID</th>
                     <th className="py-3 px-4">Date</th>
+                    <th className="py-3 px-4">Channel</th>
                     <th className="py-3 px-4">Customer</th>
                     <th className="py-3 px-4">Phone</th>
                     <th className="py-3 px-4">Tags</th>
@@ -643,7 +657,7 @@ export default function Dashboard() {
                     >
                       <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
                         <input
-                          type="checkbox"
+                           type="checkbox"
                           checked={selectedRowIds.includes(convo.id)}
                           onChange={(e) => {
                             if (e.target.checked) {
@@ -662,6 +676,11 @@ export default function Dashboard() {
                         {convo.conversation_date && convo.conversation_time
                           ? `${convo.conversation_date} ${convo.conversation_time}`
                           : (convo.created_at ? new Date(convo.created_at).toISOString().replace('T', ' ').slice(0, 19) : convo.conversation_date || '-')}
+                      </td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded text-[11px] font-medium font-heading bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center">
+                          {convo.channel || 'Whatsapp'}
+                        </span>
                       </td>
                       <td className="py-3.5 px-4 font-semibold text-slate-900 group-hover:text-emerald-600 transition-colors">
                         {convo.customer_name || 'Unknown'}
@@ -827,7 +846,7 @@ export default function Dashboard() {
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-heading">
                     Customer Details
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-heading">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs font-heading">
                     <div>
                       <span className="text-slate-400 font-semibold uppercase text-[10px] block">Customer Name</span>
                       <span className="font-bold text-slate-900 text-sm">{selectedConvo.customer_name || 'Unknown'}</span>
@@ -837,8 +856,12 @@ export default function Dashboard() {
                       <span className="font-bold text-slate-800 font-mono">{selectedConvo.phone_number || 'N/A'}</span>
                     </div>
                     <div>
-                      <span className="text-slate-400 font-semibold uppercase text-[10px] block">Company Name</span>
-                      <span className="font-bold text-slate-800">{selectedConvo.company_name || 'Individual / N/A'}</span>
+                      <span className="text-slate-400 font-semibold uppercase text-[10px] block">Channel</span>
+                      <span className="font-bold text-slate-800">{selectedConvo.channel || 'Whatsapp'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold uppercase text-[10px] block">Start Time</span>
+                      <span className="font-bold text-slate-800 font-mono">{selectedConvo.conversation_time || 'N/A'}</span>
                     </div>
                   </div>
                 </div>

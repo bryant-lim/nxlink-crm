@@ -152,10 +152,42 @@ function extractSummaryMetadata(messages, conv) {
   };
 }
 
+function resolveChannel(conv) {
+  const sourceChannel = conv.source_channel || conv.sourceChannel;
+  const instance = (conv.channel_instance || conv.channelInstance || '').toLowerCase();
+
+  if (sourceChannel === 18 || instance.includes('whatsapp') || instance.includes('wa')) {
+    return 'Whatsapp';
+  }
+  if (instance.includes('web') || instance.includes('livechat')) {
+    return 'Webchat';
+  }
+  if (instance.includes('messenger') || instance.includes('fb') || instance.includes('facebook')) {
+    return 'Messenger';
+  }
+  if (instance.includes('instagram') || instance.includes('ig')) {
+    return 'Instagram';
+  }
+
+  switch (sourceChannel) {
+    case 1:
+    case 2:
+      return 'Webchat';
+    case 18:
+      return 'Whatsapp';
+    case 19:
+      return 'Messenger';
+    case 20:
+      return 'Instagram';
+    default:
+      return conv.channel_instance || 'Whatsapp';
+  }
+}
+
 async function main() {
   console.log('==========================================');
   console.log('🔄 NXLINK Local Ingestion & Sync Tool');
-  console.log('   Target Flow: [MY]DentalHome_v2');
+  console.log('   Target Tenant: 4600 (All Conversations)');
   console.log('==========================================');
 
   loadEnv();
@@ -192,7 +224,37 @@ async function main() {
 
   console.log(`✓ Token retrieved (${token.slice(0, 20)}...)`);
 
-  console.log('\n📥 Querying NXLINK AI Conversations API (Scanning Pages for [MY]DentalHome_v2)...');
+  console.log('🔒 Verifying tenant safety with NXLINK API...');
+  const tenantCheckResp = await fetch('https://app.nxlink.ai/gw/v1/omni/admin/tenants', {
+    headers: { authorization: token }
+  });
+  if (tenantCheckResp.ok) {
+    const tCheckData = await tenantCheckResp.json();
+    const activeTenantId = tCheckData.data?.tenant_id;
+    if (activeTenantId !== 4600) {
+      console.error(`❌ Tenant safety violation: Active token tenant is ${activeTenantId}, expected 4600. Aborting.`);
+      process.exit(1);
+    }
+    console.log(`✓ Tenant 4600 verified.`);
+  } else {
+    console.error(`❌ Failed to verify tenant (HTTP ${tenantCheckResp.status}). Aborting.`);
+    process.exit(1);
+  }
+
+  // Fetch dynamic Webhook URL from app_settings
+  let dynamicWebhookUrl = process.env.NXLINK_WEBHOOK_URL || 'https://asia-east1-lark-demo-67aa3.cloudfunctions.net/nxlinkWebhook';
+  try {
+    const { data: sRow } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'nxlink_webhook_url')
+      .single();
+    if (sRow?.value?.trim()) {
+      dynamicWebhookUrl = sRow.value.trim();
+    }
+  } catch (e) {}
+
+  console.log('\n📥 Querying NXLINK AI Conversations API (Scanning Pages for Tenant 4600)...');
   let conversations = [];
 
   for (let pageNum = 1; pageNum <= 10; pageNum++) {
@@ -219,7 +281,7 @@ async function main() {
     }
   }
 
-  console.log(`Fetched ${conversations.length} total conversations from NXLINK. Filtering for [MY]DentalHome_v2...`);
+  console.log(`Fetched ${conversations.length} total conversations from NXLINK Tenant 4600...`);
 
   let insertedCount = 0;
   let skippedCount = 0;
@@ -255,34 +317,9 @@ async function main() {
       console.warn(`     Warning: transcript fetch failed for ${convId}`);
     }
 
-    // FILTER ONLY [MY]DENTALHOME_V2 FLOWS
-    let isDentalHomeV2 = false;
-    if (conv.flow_name === '[MY]DentalHome_v2' || conv.auto_flow_name === '[MY]DentalHome_v2') {
-      isDentalHomeV2 = true;
-    } else {
-      for (const m of messages) {
-        if (m.autoFlowId === 1650) {
-          isDentalHomeV2 = true;
-          break;
-        }
-        if (m.msgType === 200 && m.msgInfo) {
-          try {
-            const p = typeof m.msgInfo === 'string' ? JSON.parse(m.msgInfo) : m.msgInfo;
-            if (p.name === '[MY]DentalHome_v2') {
-              isDentalHomeV2 = true;
-              break;
-            }
-          } catch (e) {}
-        }
-      }
-    }
+    const channelName = resolveChannel(conv);
 
-    if (!isDentalHomeV2) {
-      skippedCount++;
-      continue;
-    }
-
-    console.log(`   Processing [MY]DentalHome_v2 conversation #${i + 1} (ID: ${convId})...`);
+    console.log(`   Processing conversation #${i + 1} (ID: ${convId}, Channel: ${channelName})...`);
 
     // Build clean dialogue thread
     const cleanTranscript = buildCleanDialogueThread(messages, convId);
@@ -376,25 +413,25 @@ async function main() {
         email_address: conv.email_address || null,
         customer_sentiment: sentiment || 'Neutral',
         company_name: conv.company_name || null,
-        conversation_summary: cleanSummary || '[MY]DentalHome_v2 AI Bot Consultation',
+        conversation_summary: cleanSummary || 'AI Bot Consultation',
         next_steps: nextSteps || null,
         conversation_date: convDate,
         conversation_time: convTime,
         conversation_tags: tagsList.length > 0 ? tagsList : null,
         conversation_transcript: cleanTranscript,
-        call_audio_url: callAudioUrl
+        call_audio_url: callAudioUrl,
+        channel: channelName
       }]);
 
     if (insertErr) {
       console.error(`     ❌ Supabase Insert Error for ${convId}:`, insertErr.message);
     } else {
-      console.log(`     ✅ Synced [MY]DentalHome_v2 ID ${convId} (${customerName || 'Anonymous'}) ${callAudioUrl ? '(With Audio MP3 🎵)' : ''}`);
+      console.log(`     ✅ Synced ID ${convId} (${customerName || 'Anonymous'}) [${channelName}] ${callAudioUrl ? '(With Audio MP3 🎵)' : ''}`);
       insertedCount++;
 
       // Auto-push to 3rd party webhook if record qualifies under tag rules
       if (shouldSyncToWebhook(tagsList)) {
         try {
-          const webhookUrl = process.env.NXLINK_WEBHOOK_URL || 'https://asia-east1-lark-demo-67aa3.cloudfunctions.net/nxlinkWebhook';
           const clientId = process.env.NXLINK_WEBHOOK_CLIENT_ID || 'nxw_41ef8e4dee35cd8e4c6c1d3e';
           const clientSecret = process.env.NXLINK_WEBHOOK_CLIENT_SECRET || '8ab7881cfcf9cd8428274ff2771875277c06be7404a3d4b20365bd584649ceea';
 
@@ -410,11 +447,13 @@ async function main() {
               "Sentiment": sentiment || 'Neutral',
               "Next Steps": nextSteps || null,
               "Call Audio URL": callAudioUrl || null,
-              "Conversation Date": convDate
+              "Conversation Date": convDate,
+              "Conversation Start Time": convTime,
+              "Channel": channelName
             }
           };
 
-          const wbResp = await fetch(webhookUrl, {
+          const wbResp = await fetch(dynamicWebhookUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -425,7 +464,7 @@ async function main() {
           });
 
           if (wbResp.ok) {
-            console.log(`     🚀 Auto-pushed ID ${convId} to 3rd party Webhook!`);
+            console.log(`     🚀 Auto-pushed ID ${convId} to Webhook!`);
           }
         } catch (wbErr) {
           console.error(`     ⚠️ Auto Webhook Push Error for ${convId}:`, wbErr.message);
@@ -436,8 +475,8 @@ async function main() {
 
   console.log('\n==========================================');
   console.log(`🎉 INGESTION COMPLETE!`);
-  console.log(`   [MY]DentalHome_v2 records inserted: ${insertedCount}`);
-  console.log(`   Skipped (other flows / existing): ${skippedCount}`);
+  console.log(`   Tenant 4600 records inserted: ${insertedCount}`);
+  console.log(`   Skipped (existing): ${skippedCount}`);
   console.log('==========================================');
 }
 

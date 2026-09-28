@@ -7,6 +7,7 @@ import Reports from './pages/Reports';
 import Users from './pages/Users';
 import ApiDocs from './pages/ApiDocs';
 import DatabaseMetrics from './pages/DatabaseMetrics';
+import AppSettings from './pages/AppSettings';
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
           <Route path="/analytics" element={<Navigate to="/reports" replace />} />
           <Route path="/api-docs" element={<ApiDocs />} />
           <Route path="/db-metrics" element={<DatabaseMetrics />} />
+          <Route path="/app-settings" element={<AppSettings />} />
         </Route>
       </Routes>
     </Router>
