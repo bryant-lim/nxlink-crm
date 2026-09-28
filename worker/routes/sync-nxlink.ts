@@ -121,7 +121,7 @@ export async function runNxlinkSync(env: Env) {
   }
 
   if (!token) {
-    token = 'eyJhbGciOiJIUzI1NiJ9.eyJ1SWQiOjUzMjc3LCJkZXZpY2VVbmlxdWVJZGVudGlmaWNhdGlvbiI6IjIyMmJkNjQwLTg5NjAtMTFmMS1hMGEzLWUxYTIyNTg1YTY0MSIsInV1SWQiOiI2YTZhOTQxMGU0YjA5OTU4MmFhY2JjOWEifQ.zQ-WHvsnm_5cyIQKCiTacukA7ZVPETinsDgjALM0OBI';
+    token = 'eyJhbGciOiJIUzI1NiJ9.eyJ1SWQiOjU3OTk0LCJkZXZpY2VVbmlxdWVJZGVudGlmaWNhdGlvbiI6IjQxOTNlYjUwLWJhZWItMTFmMS04NWI5LTgxOTNmODA2MGY2MSIsInV1SWQiOiI2YWI5ZGM3Y2U0YjA3YTQ1ZjQ0MDQ1ODYifQ.BidmK5Cfd2SGlfej8l7QsgV5eCkjph8X_YoTPFtan8E';
   }
 
   let conversations: any[] = [];
