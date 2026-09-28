@@ -23,8 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 
-# Local Netlify folder
+# Local Netlify & Cloudflare folders
 .netlify
+.wrangler
 
 # Environment Variables & Credentials
 .env
