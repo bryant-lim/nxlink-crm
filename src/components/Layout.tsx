@@ -5,14 +5,12 @@ import {
   LayoutDashboard, 
   Users as UsersIcon, 
   UserCog, 
-  Code, 
   LogOut, 
   Loader2, 
   Menu, 
   X,
   PanelLeftClose,
   PanelLeftOpen,
-  TrendingUp,
   Database
 } from 'lucide-react';
 
@@ -91,8 +89,6 @@ export default function Layout() {
     );
   }
 
-  const isReportsActive = location.pathname.startsWith('/reports');
-
   return (
     <div className="min-h-screen bg-[#fafafa] text-slate-900 flex flex-col md:flex-row font-sans">
       {/* Desktop Sidebar */}
@@ -105,7 +101,7 @@ export default function Layout() {
         <div className={`h-16 flex items-center justify-between px-4 border-b border-slate-100 ${isCollapsed ? 'justify-center' : ''}`}>
           {!isCollapsed && (
             <Link to="/" className="flex items-center group">
-              <span className="text-base font-bold font-heading tracking-tight text-slate-900">ASimple MW</span>
+              <span className="text-base font-bold font-heading tracking-tight text-slate-900">Dashboard</span>
             </Link>
           )}
 
@@ -153,22 +149,6 @@ export default function Layout() {
             </div>
           </Link>
 
-          {/* Tag Analytics / Reports */}
-          <Link
-            to="/reports"
-            className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'} py-2.5 rounded-lg text-sm font-medium transition-all ${
-              isReportsActive 
-                ? 'bg-slate-100 text-slate-900 font-semibold' 
-                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-            title={isCollapsed ? 'Tag Analytics' : ''}
-          >
-            <div className="flex items-center space-x-3">
-              <TrendingUp size={18} className={isReportsActive ? 'text-emerald-600' : 'text-slate-400'} />
-              {!isCollapsed && <span className="font-heading">Tag Analytics</span>}
-            </div>
-          </Link>
-
           {/* User Management (Admin Only) */}
           {userRole === 'admin' && (
             <Link
@@ -186,22 +166,6 @@ export default function Layout() {
               </div>
             </Link>
           )}
-
-          {/* API Integration */}
-          <Link
-            to="/api-docs"
-            className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'} py-2.5 rounded-lg text-sm font-medium transition-all ${
-              location.pathname === '/api-docs' 
-                ? 'bg-slate-100 text-slate-900 font-semibold' 
-                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-            title={isCollapsed ? 'API Integration' : ''}
-          >
-            <div className="flex items-center space-x-3">
-              <Code size={18} className={location.pathname === '/api-docs' ? 'text-emerald-600' : 'text-slate-400'} />
-              {!isCollapsed && <span className="font-heading">API Integration</span>}
-            </div>
-          </Link>
 
           {/* Database Metrics */}
           <Link
@@ -258,7 +222,7 @@ export default function Layout() {
       <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sticky top-0 z-40 md:hidden">
         <div className="flex items-center">
           <div>
-            <span className="text-base font-bold font-heading tracking-tight text-slate-900 block leading-tight">ASimple CRM</span>
+            <span className="text-base font-bold font-heading tracking-tight text-slate-900 block leading-tight">Dashboard</span>
             <span className="text-[10px] text-slate-400 font-mono">{displayName} ({userRole})</span>
           </div>
         </div>
@@ -285,14 +249,6 @@ export default function Layout() {
               <UsersIcon size={20} className="text-slate-400" />
               <span className="font-heading">Customer Directory</span>
             </Link>
-
-            <div className="space-y-1 pl-4 border-l-2 border-slate-200 py-1">
-              <span className="text-xs font-bold text-slate-400 font-heading uppercase">Report & Analytics</span>
-              <Link to="/reports" className="flex items-center space-x-2 py-2 text-xs font-heading font-medium text-slate-700">
-                <TrendingUp size={14} className="text-emerald-600" />
-                <span>Tag Analytics</span>
-              </Link>
-            </div>
 
             {userRole === 'admin' && (
               <Link to="/users" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50">
@@ -330,10 +286,6 @@ export default function Layout() {
         <Link to="/customers" className="flex flex-col items-center py-1 px-3 rounded-lg text-slate-600">
           <UsersIcon size={18} />
           <span className="text-[10px] font-heading mt-1">Customers</span>
-        </Link>
-        <Link to="/reports" className="flex flex-col items-center py-1 px-3 rounded-lg text-slate-600">
-          <TrendingUp size={18} />
-          <span className="text-[10px] font-heading mt-1">Analytics</span>
         </Link>
       </div>
     </div>

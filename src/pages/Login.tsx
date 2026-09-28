@@ -37,7 +37,7 @@ export default function Login() {
       
       <div className="max-w-md w-full bg-nx-card border border-gray-200 rounded-2xl shadow-xl p-8 z-10 relative">
         <div className="flex flex-col items-center mb-8">
-          <h1 className="text-2xl font-bold text-nx-dark tracking-wide">Dental Home Bridge</h1>
+          <h1 className="text-2xl font-bold text-nx-dark tracking-wide">Login to Dashboard</h1>
         </div>
 
         {error && (
