@@ -438,18 +438,16 @@ async function main() {
           const autoPayload = {
             fields: {
               "Conversation ID": convId.toString(),
-              "Customer Name": customerName || 'Unknown',
+              "Patient Name": customerName || 'Unknown',
               "Phone Number": customerPhone || 'Not Provided',
+              "Source": channelName,
+              "Timestamp": `${convDate} ${convTime}`,
               "Company Name": conv.company_name || null,
               "Email Address": conv.email_address || null,
               "Tags": tagsList,
               "Full Summary": cleanSummary || null,
               "Sentiment": sentiment || 'Neutral',
-              "Next Steps": nextSteps || null,
-              "Call Audio URL": callAudioUrl || null,
-              "Conversation Date": convDate,
-              "Conversation Start Time": convTime,
-              "Channel": channelName
+              "Next Steps": nextSteps || null
             }
           };
 

@@ -369,18 +369,16 @@ export async function runNxlinkSync(env: Env) {
             body: JSON.stringify({
               fields: {
                 'Conversation ID': String(convId),
-                'Customer Name': meta.customer_name || 'Unknown',
+                'Patient Name': meta.customer_name || 'Unknown',
                 'Phone Number': meta.phone_number || 'Not Provided',
+                'Source': channelName,
+                'Timestamp': `${cDateStr} ${cTimeStr}`,
                 'Company Name': conv.company_name || null,
                 'Email Address': conv.email_address || null,
                 Tags: tagsList,
                 'Full Summary': meta.conversation_summary || null,
                 Sentiment: meta.customer_sentiment || 'Neutral',
-                'Next Steps': meta.next_steps || null,
-                'Call Audio URL': callAudioUrl,
-                'Conversation Date': cDateStr,
-                'Conversation Start Time': cTimeStr,
-                Channel: channelName
+                'Next Steps': meta.next_steps || null
               }
             })
           });

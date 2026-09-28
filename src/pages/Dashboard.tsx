@@ -221,18 +221,16 @@ export default function Dashboard() {
       const payload = {
         fields: {
           "Conversation ID": getConvoId(c),
-          "Customer Name": c.customer_name || 'Unknown',
+          "Patient Name": c.customer_name || 'Unknown',
           "Phone Number": c.phone_number || 'Not Provided',
+          "Source": c.channel || 'Whatsapp',
+          "Timestamp": c.conversation_date && c.conversation_time ? `${c.conversation_date} ${c.conversation_time}` : (c.conversation_date || null),
           "Company Name": c.company_name || null,
           "Email Address": c.email_address || null,
           "Tags": c.conversation_tags,
           "Full Summary": c.conversation_summary || null,
           "Sentiment": c.customer_sentiment || 'Neutral',
-          "Next Steps": c.next_steps || null,
-          "Call Audio URL": c.call_audio_url || null,
-          "Conversation Date": c.conversation_date || null,
-          "Conversation Start Time": c.conversation_time || null,
-          "Channel": c.channel || 'Whatsapp'
+          "Next Steps": c.next_steps || null
         }
       };
 
