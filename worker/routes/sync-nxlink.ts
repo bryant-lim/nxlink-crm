@@ -156,17 +156,17 @@ function resolveChannel(conv: any): string {
 
   // Explicit channel markers
   if (instance.includes('whatsapp') || instance.includes('wa')) {
-    return 'Whatsapp';
+    return 'WA';
   }
   if (instance.includes('messenger') || instance.includes('fb') || instance.includes('facebook') || sourceChannel === 19) {
-    return 'Messenger';
+    return 'FB';
   }
   if (instance.includes('instagram') || instance.includes('ig') || sourceChannel === 20) {
-    return 'Instagram';
+    return 'IG';
   }
 
-  // All other Flow Manager bot sessions (Dental Home web widget, demo, etc.) are Webchat
-  return 'Webchat';
+  // All other Flow Manager bot sessions (Dental Home web widget, demo, etc.) are Website
+  return 'Website';
 }
 
 export async function runNxlinkSync(env: Env) {
@@ -443,7 +443,7 @@ export async function runNxlinkSync(env: Env) {
                 'Conversation ID': String(convId),
                 'Patient Name': meta.customer_name || 'N/A',
                 'Phone Number': meta.phone_number || 'N/A',
-                'Source': channelName || 'Webchat',
+                'Source': channelName || 'Website',
                 'Timestamp': `${cDateStr} ${cTimeStr}`,
                 'Company Name': conv.company_name?.trim() || 'N/A',
                 'Email Address': conv.email_address?.trim() || 'N/A',

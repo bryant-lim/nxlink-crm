@@ -234,7 +234,7 @@ export default function Dashboard() {
           "Conversation ID": getConvoId(c),
           "Patient Name": c.customer_name || 'N/A',
           "Phone Number": c.phone_number || 'N/A',
-          "Source": c.channel || 'Webchat',
+          "Source": c.channel || 'Website',
           "Timestamp": c.conversation_date && c.conversation_time ? `${c.conversation_date} ${c.conversation_time}` : (c.conversation_date || 'N/A'),
           "Company Name": c.company_name || 'N/A',
           "Email Address": c.email_address || 'N/A',
@@ -704,7 +704,7 @@ export default function Dashboard() {
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <span className="px-2 py-0.5 rounded text-[11px] font-medium font-heading bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center">
-                          {convo.channel || 'Whatsapp'}
+                          {convo.channel || 'Website'}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 font-semibold text-slate-900 group-hover:text-emerald-600 transition-colors">
@@ -894,7 +894,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <span className="text-slate-400 font-semibold uppercase text-[10px] block">Channel</span>
-                      <span className="font-bold text-slate-800">{selectedConvo.channel || 'Whatsapp'}</span>
+                      <span className="font-bold text-slate-800">{selectedConvo.channel || 'Website'}</span>
                     </div>
                     <div>
                       <span className="text-slate-400 font-semibold uppercase text-[10px] block">Start Time</span>
