@@ -446,7 +446,7 @@ export default function Customers() {
               </div>
 
               {/* Call Audio MP3 Player */}
-              {selectedDetailConvo.call_audio_url && (
+              {selectedDetailConvo.call_audio_url && selectedDetailConvo.call_audio_url !== 'N/A' && (
                 <div className="bg-emerald-50/70 border border-emerald-200 p-4 rounded-xl space-y-2">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-bold text-emerald-900 uppercase tracking-wider font-heading flex items-center">

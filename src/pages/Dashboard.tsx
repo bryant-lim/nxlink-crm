@@ -128,22 +128,30 @@ export default function Dashboard() {
       const statusMap = getWebhookStatusMap();
       const mappedConvos = data.map(c => {
         const entry = statusMap[c.id];
-        const isEligible = shouldSyncToWebhook(c.conversation_tags);
         
-        let status: 'synced' | 'not_synced' | 'failed' = 'synced';
+        // Prioritize actual database webhook_status, then localStorage, then default to 'not_synced'
+        let status: 'synced' | 'not_synced' | 'failed' = 'not_synced';
         if (c.webhook_status) {
           status = c.webhook_status as any;
         } else if (entry) {
           status = entry.status;
-        } else if (isEligible) {
-          status = 'synced';
         }
 
         return {
           ...c,
+          customer_name: c.customer_name || 'N/A',
+          phone_number: c.phone_number || 'N/A',
+          preferred_branch: c.preferred_branch || 'N/A',
+          preferred_date: c.preferred_date || 'N/A',
+          preferred_treatment: c.preferred_treatment || 'N/A',
+          company_name: c.company_name || 'N/A',
+          email_address: c.email_address || 'N/A',
+          next_steps: c.next_steps || 'N/A',
+          customer_sentiment: c.customer_sentiment || 'N/A',
+          conversation_summary: c.conversation_summary || 'N/A',
           webhook_status: status,
           webhook_error: entry ? entry.error : (c.webhook_error || null),
-          webhook_synced_at: entry ? (entry.synced_at || null) : (c.webhook_synced_at || (status === 'synced' ? `${c.conversation_date || ''} ${c.conversation_time || ''}`.trim() : null))
+          webhook_synced_at: entry ? (entry.synced_at || null) : (c.webhook_synced_at || null)
         };
       });
       setConversations(mappedConvos);
@@ -224,26 +232,26 @@ export default function Dashboard() {
       const payload = {
         fields: {
           "Conversation ID": getConvoId(c),
-          "Patient Name": c.customer_name || 'Unknown',
-          "Phone Number": c.phone_number || 'Not Provided',
-          "Source": c.channel || 'Whatsapp',
-          "Timestamp": c.conversation_date && c.conversation_time ? `${c.conversation_date} ${c.conversation_time}` : (c.conversation_date || null),
-          "Company Name": c.company_name || null,
-          "Email Address": c.email_address || null,
-          "Tags": c.conversation_tags,
-          "Full Summary": c.conversation_summary || null,
-          "Sentiment": c.customer_sentiment || 'Neutral',
-          "Next Steps": c.next_steps || null,
-          "Preferred Branch": c.preferred_branch || null,
-          "Preferred Date": c.preferred_date || null,
-          "Preferred Treatment": c.preferred_treatment || null
+          "Patient Name": c.customer_name || 'N/A',
+          "Phone Number": c.phone_number || 'N/A',
+          "Source": c.channel || 'Webchat',
+          "Timestamp": c.conversation_date && c.conversation_time ? `${c.conversation_date} ${c.conversation_time}` : (c.conversation_date || 'N/A'),
+          "Company Name": c.company_name || 'N/A',
+          "Email Address": c.email_address || 'N/A',
+          "Tags": c.conversation_tags || [],
+          "Full Summary": c.conversation_summary || 'N/A',
+          "Sentiment": c.customer_sentiment || 'N/A',
+          "Next Steps": c.next_steps || 'N/A',
+          "Preferred Branch": c.preferred_branch || 'N/A',
+          "Preferred Date": c.preferred_date || 'N/A',
+          "Preferred Treatment": c.preferred_treatment || 'N/A'
         }
       };
 
       const nowTs = getFormattedTimestamp();
 
       try {
-        let resp = await fetch('/.netlify/functions/push-webhook', {
+        let resp = await fetch('/api/push-webhook', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -267,6 +275,11 @@ export default function Dashboard() {
           c.webhook_status = 'synced';
           c.webhook_error = null;
           c.webhook_synced_at = nowTs;
+          await supabase.from('conversations').update({
+            webhook_status: 'synced',
+            webhook_synced_at: new Date().toISOString(),
+            webhook_error: null
+          }).eq('id', c.id);
         } else {
           fail++;
           const errText = await resp.text().catch(() => '');
@@ -281,6 +294,10 @@ export default function Dashboard() {
           c.webhook_status = 'failed';
           c.webhook_error = errMsg;
           c.webhook_synced_at = nowTs;
+          await supabase.from('conversations').update({
+            webhook_status: 'failed',
+            webhook_error: errMsg
+          }).eq('id', c.id);
         }
       } catch (err: any) {
         fail++;
@@ -289,6 +306,10 @@ export default function Dashboard() {
         c.webhook_status = 'failed';
         c.webhook_error = errMsg;
         c.webhook_synced_at = nowTs;
+        await supabase.from('conversations').update({
+          webhook_status: 'failed',
+          webhook_error: errMsg
+        }).eq('id', c.id);
       }
     }
 
@@ -919,7 +940,7 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {selectedConvo.call_audio_url && (
+                {selectedConvo.call_audio_url && selectedConvo.call_audio_url !== 'N/A' && (
                   <div className="bg-emerald-50/60 border border-emerald-200 p-4 rounded-xl space-y-2">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-bold text-emerald-900 uppercase tracking-wider font-heading flex items-center">

@@ -140,21 +140,22 @@ export async function handleIngestCrm(request: Request, env: Env): Promise<Respo
       .from('conversations')
       .insert([
         {
-          customer_name: extractedData.customer_name,
-          phone_number: extractedData.phone_number,
-          customer_sentiment: extractedData.customer_sentiment,
-          conversation_summary: extractedData.conversation_summary,
-          next_steps: extractedData.next_steps,
-          preferred_branch: extractedData.preferred_branch,
-          preferred_date: extractedData.preferred_date,
-          preferred_treatment: extractedData.preferred_treatment,
-          company_name: extractedData.company_name,
-          email_address: extractedData.email_address,
+          customer_name: extractedData.customer_name || 'N/A',
+          phone_number: extractedData.phone_number || 'N/A',
+          customer_sentiment: extractedData.customer_sentiment || 'N/A',
+          conversation_summary: extractedData.conversation_summary || 'N/A',
+          next_steps: extractedData.next_steps || 'N/A',
+          preferred_branch: extractedData.preferred_branch || 'N/A',
+          preferred_date: extractedData.preferred_date || 'N/A',
+          preferred_treatment: extractedData.preferred_treatment || 'N/A',
+          company_name: extractedData.company_name || 'N/A',
+          email_address: extractedData.email_address || 'N/A',
           conversation_tags: conversation_tags,
           conversation_date: new Date().toISOString().split('T')[0],
           conversation_time: new Date().toISOString().split('T')[1].split('.')[0],
           conversation_transcript: rawText,
-          call_audio_url: callAudioUrl
+          call_audio_url: callAudioUrl,
+          webhook_status: 'not_synced'
         }
       ])
       .select('id')

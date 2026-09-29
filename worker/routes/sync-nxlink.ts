@@ -124,14 +124,14 @@ function extractSummaryMetadata(messages: any[], conv: any) {
   const finalTreatment = extractedTreatment || conv.preferred_treatment || conv.preferredTreatment || null;
 
   return {
-    customer_sentiment: cleanField(sentiment),
-    conversation_summary: cleanField(summary),
-    next_steps: cleanField(nextSteps),
-    customer_name: cleanShortField(finalName),
-    phone_number: cleanShortField(finalPhone),
-    preferred_branch: cleanShortField(finalBranch),
-    preferred_date: cleanShortField(finalDate),
-    preferred_treatment: cleanShortField(finalTreatment)
+    customer_sentiment: cleanField(sentiment) || 'N/A',
+    conversation_summary: cleanField(summary) || 'N/A',
+    next_steps: cleanField(nextSteps) || 'N/A',
+    customer_name: cleanShortField(finalName) || 'N/A',
+    phone_number: cleanShortField(finalPhone) || 'N/A',
+    preferred_branch: cleanShortField(finalBranch) || 'N/A',
+    preferred_date: cleanShortField(finalDate) || 'N/A',
+    preferred_treatment: cleanShortField(finalTreatment) || 'N/A'
   };
 }
 
@@ -374,18 +374,22 @@ export async function runNxlinkSync(env: Env) {
 
     let wasIngestedOrUpdated = false;
 
+    let convDbId = existingRow?.id;
+
     if (existingRow) {
       await supabase
         .from('conversations')
         .update({
-          customer_name: meta.customer_name,
-          phone_number: meta.phone_number,
-          customer_sentiment: meta.customer_sentiment,
-          conversation_summary: meta.conversation_summary,
-          next_steps: meta.next_steps,
-          preferred_branch: meta.preferred_branch,
-          preferred_date: meta.preferred_date,
-          preferred_treatment: meta.preferred_treatment,
+          customer_name: meta.customer_name || 'N/A',
+          phone_number: meta.phone_number || 'N/A',
+          customer_sentiment: meta.customer_sentiment || 'N/A',
+          conversation_summary: meta.conversation_summary || 'N/A',
+          next_steps: meta.next_steps || 'N/A',
+          preferred_branch: meta.preferred_branch || 'N/A',
+          preferred_date: meta.preferred_date || 'N/A',
+          preferred_treatment: meta.preferred_treatment || 'N/A',
+          company_name: conv.company_name?.trim() || existingRow.company_name || 'N/A',
+          email_address: conv.email_address?.trim() || existingRow.email_address || 'N/A',
           conversation_tags: tagsList,
           conversation_date: cDateStr,
           conversation_time: cTimeStr,
@@ -396,30 +400,32 @@ export async function runNxlinkSync(env: Env) {
       wasIngestedOrUpdated = true;
       syncedCount++;
     } else {
-      const { error } = await supabase.from('conversations').insert([
+      const { data: insertedRows, error } = await supabase.from('conversations').insert([
         {
-          customer_name: meta.customer_name,
-          phone_number: meta.phone_number,
-          customer_sentiment: meta.customer_sentiment,
-          conversation_summary: meta.conversation_summary,
-          next_steps: meta.next_steps,
-          preferred_branch: meta.preferred_branch,
-          preferred_date: meta.preferred_date,
-          preferred_treatment: meta.preferred_treatment,
-          company_name: conv.company_name || null,
-          email_address: conv.email_address || null,
+          customer_name: meta.customer_name || 'N/A',
+          phone_number: meta.phone_number || 'N/A',
+          customer_sentiment: meta.customer_sentiment || 'N/A',
+          conversation_summary: meta.conversation_summary || 'N/A',
+          next_steps: meta.next_steps || 'N/A',
+          preferred_branch: meta.preferred_branch || 'N/A',
+          preferred_date: meta.preferred_date || 'N/A',
+          preferred_treatment: meta.preferred_treatment || 'N/A',
+          company_name: conv.company_name?.trim() || 'N/A',
+          email_address: conv.email_address?.trim() || 'N/A',
           conversation_tags: tagsList,
           conversation_date: cDateStr,
           conversation_time: cTimeStr,
           conversation_transcript: rawTranscript,
           call_audio_url: callAudioUrl,
-          channel: channelName
+          channel: channelName,
+          webhook_status: 'not_synced'
         }
-      ]);
+      ]).select('id');
 
       if (!error) {
         syncedCount++;
         wasIngestedOrUpdated = true;
+        convDbId = insertedRows?.[0]?.id;
       }
     }
 
@@ -435,24 +441,34 @@ export async function runNxlinkSync(env: Env) {
             body: JSON.stringify({
               fields: {
                 'Conversation ID': String(convId),
-                'Patient Name': meta.customer_name || 'Unknown',
-                'Phone Number': meta.phone_number || 'Not Provided',
-                'Source': channelName,
+                'Patient Name': meta.customer_name || 'N/A',
+                'Phone Number': meta.phone_number || 'N/A',
+                'Source': channelName || 'Webchat',
                 'Timestamp': `${cDateStr} ${cTimeStr}`,
-                'Company Name': conv.company_name || null,
-                'Email Address': conv.email_address || null,
+                'Company Name': conv.company_name?.trim() || 'N/A',
+                'Email Address': conv.email_address?.trim() || 'N/A',
                 Tags: tagsList,
-                'Full Summary': meta.conversation_summary || null,
-                Sentiment: meta.customer_sentiment || 'Neutral',
-                'Next Steps': meta.next_steps || null,
-                'Preferred Branch': meta.preferred_branch || null,
-                'Preferred Date': meta.preferred_date || null,
-                'Preferred Treatment': meta.preferred_treatment || null
+                'Full Summary': meta.conversation_summary || 'N/A',
+                Sentiment: meta.customer_sentiment || 'N/A',
+                'Next Steps': meta.next_steps || 'N/A',
+                'Preferred Branch': meta.preferred_branch || 'N/A',
+                'Preferred Date': meta.preferred_date || 'N/A',
+                'Preferred Treatment': meta.preferred_treatment || 'N/A'
               }
             })
           });
           if (resp.ok) {
             webhookPushedCount++;
+            if (convDbId) {
+              await supabase
+                .from('conversations')
+                .update({
+                  webhook_status: 'synced',
+                  webhook_synced_at: new Date().toISOString(),
+                  webhook_error: null
+                })
+                .eq('id', convDbId);
+            }
           }
         } catch (e) {}
       }
