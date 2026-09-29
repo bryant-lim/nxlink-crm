@@ -84,7 +84,8 @@ export async function handleIngestCrm(request: Request, env: Env): Promise<Respo
       customer_name: cleanShort(extractField(rawText, 'Customer Name:')),
       phone_number: cleanShort(extractField(rawText, 'Phone Number:')),
       preferred_branch: cleanShort(extractField(rawText, 'Preferred Branch:')),
-      preferred_date: cleanShort(extractField(rawText, 'Preferred Date:'))
+      preferred_date: cleanShort(extractField(rawText, 'Preferred Date:')),
+      preferred_treatment: cleanShort(extractField(rawText, 'Preferred Treatment:'))
     };
 
     if (extractedData.company_name?.toLowerCase() === 'null') extractedData.company_name = null;
@@ -146,6 +147,7 @@ export async function handleIngestCrm(request: Request, env: Env): Promise<Respo
           next_steps: extractedData.next_steps,
           preferred_branch: extractedData.preferred_branch,
           preferred_date: extractedData.preferred_date,
+          preferred_treatment: extractedData.preferred_treatment,
           company_name: extractedData.company_name,
           email_address: extractedData.email_address,
           conversation_tags: conversation_tags,

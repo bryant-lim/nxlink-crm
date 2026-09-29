@@ -398,6 +398,10 @@ export default function Customers() {
                     <span className="font-bold text-slate-800 font-mono">{selectedDetailConvo.preferred_date || 'N/A'}</span>
                   </div>
                   <div>
+                    <span className="text-slate-400 font-semibold uppercase text-[10px] block">Preferred Treatment</span>
+                    <span className="font-bold text-slate-800 capitalize">{selectedDetailConvo.preferred_treatment || 'N/A'}</span>
+                  </div>
+                  <div>
                     <span className="text-slate-400 font-semibold uppercase text-[10px] block">Company Name</span>
                     <span className="font-bold text-slate-800">{selectedDetailConvo.company_name || 'Individual / N/A'}</span>
                   </div>

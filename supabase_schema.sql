@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS public.conversations (
     next_steps TEXT,
     preferred_branch TEXT,
     preferred_date TEXT,
+    preferred_treatment TEXT,
     channel TEXT,
     call_audio_url TEXT,
     webhook_status TEXT DEFAULT 'not_synced',

@@ -15,6 +15,7 @@ function extractSummaryMetadata(messages: any[], conv: any) {
   let extractedPhone: string | null = null;
   let extractedBranch: string | null = null;
   let extractedDate: string | null = null;
+  let extractedTreatment: string | null = null;
 
   const parseSummaryText = (text: string) => {
     if (!text) return;
@@ -32,19 +33,24 @@ function extractSummaryMetadata(messages: any[], conv: any) {
       extractedName = nMatch[1].trim();
     }
 
-    const pMatch = text.match(/Phone Number:\s*(.*?)(?=\s*Preferred Branch:|\s*Preferred Date:|$)/i);
+    const pMatch = text.match(/Phone Number:\s*(.*?)(?=\s*Preferred Branch:|\s*Preferred Date:|\s*Preferred Treatment:|$)/i);
     if (pMatch && pMatch[1].trim() && pMatch[1].trim().toLowerCase() !== 'n/a' && !extractedPhone) {
       extractedPhone = pMatch[1].trim();
     }
 
-    const bMatch = text.match(/Preferred Branch:\s*(.*?)(?=\s*Preferred Date:|$)/i);
+    const bMatch = text.match(/Preferred Branch:\s*(.*?)(?=\s*Preferred Date:|\s*Preferred Treatment:|$)/i);
     if (bMatch && bMatch[1].trim() && bMatch[1].trim().toLowerCase() !== 'n/a' && !extractedBranch) {
       extractedBranch = bMatch[1].trim();
     }
 
-    const dMatch = text.match(/Preferred Date:\s*(.*?)(?=$)/i);
+    const dMatch = text.match(/Preferred Date:\s*(.*?)(?=\s*Preferred Treatment:|$)/i);
     if (dMatch && dMatch[1].trim() && dMatch[1].trim().toLowerCase() !== 'n/a' && !extractedDate) {
       extractedDate = dMatch[1].trim();
+    }
+
+    const tMatch = text.match(/Preferred Treatment:\s*(.*?)(?=$)/i);
+    if (tMatch && tMatch[1].trim() && tMatch[1].trim().toLowerCase() !== 'n/a' && !extractedTreatment) {
+      extractedTreatment = tMatch[1].trim();
     }
   };
 
@@ -64,6 +70,31 @@ function extractSummaryMetadata(messages: any[], conv: any) {
           parseSummaryText(parsed.summarize);
         }
       }
+
+      if (m && m.msgType === 308 && m.msgInfo) {
+        let parsed: any = null;
+        try {
+          if (typeof m.msgInfo === 'string' && m.msgInfo.trim().startsWith('{')) {
+            parsed = JSON.parse(m.msgInfo);
+          } else if (typeof m.msgInfo === 'object') {
+            parsed = m.msgInfo;
+          }
+        } catch (e) {}
+
+        if (parsed && Array.isArray(parsed.branches)) {
+          for (const b of parsed.branches) {
+            const key = (b.key || b.name || '').toLowerCase();
+            const val = b.value ? String(b.value).trim() : '';
+            if (val && val.toLowerCase() !== 'n/a') {
+              if (key.includes('treatment') && !extractedTreatment) extractedTreatment = val;
+              if (key.includes('branch') && !extractedBranch) extractedBranch = val;
+              if (key.includes('date') && !extractedDate) extractedDate = val;
+              if (key.includes('name') && !extractedName) extractedName = val;
+              if (key.includes('phone') && !extractedPhone) extractedPhone = val;
+            }
+          }
+        }
+      }
     }
   }
 
@@ -74,7 +105,7 @@ function extractSummaryMetadata(messages: any[], conv: any) {
     if (!val) return null;
     let s = val.split(/\[nxlink_id:/i)[0].trim();
     s = s
-      .replace(/(?:Customer Name|Phone Number|Preferred Branch|Preferred Date):.*$/is, '')
+      .replace(/(?:Customer Name|Phone Number|Preferred Branch|Preferred Date|Preferred Treatment):.*$/is, '')
       .replace(/["}'\\\}\],]+$/g, '')
       .trim();
     return s.length > 0 ? s : null;
@@ -90,6 +121,7 @@ function extractSummaryMetadata(messages: any[], conv: any) {
   const finalPhone = extractedPhone || conv.customer_phone || conv.phone || null;
   const finalBranch = extractedBranch || conv.preferred_branch || conv.preferredBranch || null;
   const finalDate = extractedDate || conv.preferred_date || conv.preferredDate || null;
+  const finalTreatment = extractedTreatment || conv.preferred_treatment || conv.preferredTreatment || null;
 
   return {
     customer_sentiment: cleanField(sentiment),
@@ -98,7 +130,8 @@ function extractSummaryMetadata(messages: any[], conv: any) {
     customer_name: cleanShortField(finalName),
     phone_number: cleanShortField(finalPhone),
     preferred_branch: cleanShortField(finalBranch),
-    preferred_date: cleanShortField(finalDate)
+    preferred_date: cleanShortField(finalDate),
+    preferred_treatment: cleanShortField(finalTreatment)
   };
 }
 
@@ -224,7 +257,7 @@ export async function runNxlinkSync(env: Env) {
   // 2. Fetch existing records in ONE single Supabase subrequest
   const { data: recentRows } = await supabase
     .from('conversations')
-    .select('id, customer_name, conversation_summary, conversation_tags, channel, preferred_branch, preferred_date, conversation_transcript')
+    .select('id, customer_name, conversation_summary, conversation_tags, channel, preferred_branch, preferred_date, preferred_treatment, conversation_transcript')
     .order('created_at', { ascending: false })
     .limit(300);
 
@@ -258,10 +291,11 @@ export async function runNxlinkSync(env: Env) {
     } else {
       const tagsChanged = tagsList.length > 0 && JSON.stringify(existingRow.conversation_tags || []) !== JSON.stringify(tagsList);
       const branchMissing = !existingRow.preferred_branch;
+      const treatmentMissing = !existingRow.preferred_treatment;
       const channelChanged = existingRow.channel !== channelName;
       const incomplete = !existingRow.customer_name || !existingRow.conversation_summary || !existingRow.channel;
 
-      if (incomplete || tagsChanged || branchMissing || channelChanged) {
+      if (incomplete || tagsChanged || branchMissing || treatmentMissing || channelChanged) {
         itemsToProcess.push({ conv, existingRow });
       }
     }
@@ -351,6 +385,7 @@ export async function runNxlinkSync(env: Env) {
           next_steps: meta.next_steps,
           preferred_branch: meta.preferred_branch,
           preferred_date: meta.preferred_date,
+          preferred_treatment: meta.preferred_treatment,
           conversation_tags: tagsList,
           conversation_date: cDateStr,
           conversation_time: cTimeStr,
@@ -370,6 +405,7 @@ export async function runNxlinkSync(env: Env) {
           next_steps: meta.next_steps,
           preferred_branch: meta.preferred_branch,
           preferred_date: meta.preferred_date,
+          preferred_treatment: meta.preferred_treatment,
           company_name: conv.company_name || null,
           email_address: conv.email_address || null,
           conversation_tags: tagsList,
@@ -410,7 +446,8 @@ export async function runNxlinkSync(env: Env) {
                 Sentiment: meta.customer_sentiment || 'Neutral',
                 'Next Steps': meta.next_steps || null,
                 'Preferred Branch': meta.preferred_branch || null,
-                'Preferred Date': meta.preferred_date || null
+                'Preferred Date': meta.preferred_date || null,
+                'Preferred Treatment': meta.preferred_treatment || null
               }
             })
           });

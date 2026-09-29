@@ -39,6 +39,7 @@ interface Conversation {
   next_steps: string;
   preferred_branch?: string | null;
   preferred_date?: string | null;
+  preferred_treatment?: string | null;
   call_audio_url?: string;
   webhook_status?: 'synced' | 'not_synced' | 'failed' | null;
   webhook_error?: string | null;
@@ -234,7 +235,8 @@ export default function Dashboard() {
           "Sentiment": c.customer_sentiment || 'Neutral',
           "Next Steps": c.next_steps || null,
           "Preferred Branch": c.preferred_branch || null,
-          "Preferred Date": c.preferred_date || null
+          "Preferred Date": c.preferred_date || null,
+          "Preferred Treatment": c.preferred_treatment || null
         }
       };
 
@@ -864,6 +866,10 @@ export default function Dashboard() {
                     <div>
                       <span className="text-slate-400 font-semibold uppercase text-[10px] block">Preferred Date</span>
                       <span className="font-bold text-slate-800 font-mono">{selectedConvo.preferred_date || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold uppercase text-[10px] block">Preferred Treatment</span>
+                      <span className="font-bold text-slate-800 capitalize">{selectedConvo.preferred_treatment || 'N/A'}</span>
                     </div>
                     <div>
                       <span className="text-slate-400 font-semibold uppercase text-[10px] block">Channel</span>
