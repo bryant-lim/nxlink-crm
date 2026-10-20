@@ -103,10 +103,10 @@ def get_token(base_url: str, use_session: bool, headless: bool) -> str:
                 f"❌ No usable credentials at {CREDS} "
                 "(line 1 = account, line 2 = password).")
         log(f"Logging in as {account} at {host_of(base_url)}...")
-        page.goto(login_page, wait_until="domcontentloaded", timeout=60_000)
-        page.wait_for_timeout(2000)
-        page.fill("input[placeholder*='Account'], input[placeholder*='Email']", account)
-        page.fill("input[type=password]", password)
+        page.goto(login_page, wait_until="load", timeout=60_000)
+        page.wait_for_selector("input[type=password]", timeout=30_000)
+        page.locator("input[type=text]").first.fill(account)
+        page.locator("input[type=password]").first.fill(password)
         page.click("button:has-text('Sign In')")
         page.wait_for_timeout(6000)
 

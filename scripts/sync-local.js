@@ -170,32 +170,17 @@ function resolveChannel(conv) {
   const sourceChannel = conv.source_channel || conv.sourceChannel;
   const instance = (conv.channel_instance || conv.channelInstance || '').toLowerCase();
 
-  if (sourceChannel === 18 || instance.includes('whatsapp') || instance.includes('wa')) {
-    return 'Whatsapp';
+  if (instance.includes('whatsapp') || instance.includes('wa') || sourceChannel === 18) {
+    return 'WA';
   }
-  if (instance.includes('web') || instance.includes('livechat')) {
-    return 'Webchat';
+  if (instance.includes('messenger') || instance.includes('fb') || instance.includes('facebook') || sourceChannel === 19) {
+    return 'FB';
   }
-  if (instance.includes('messenger') || instance.includes('fb') || instance.includes('facebook')) {
-    return 'Messenger';
-  }
-  if (instance.includes('instagram') || instance.includes('ig')) {
-    return 'Instagram';
+  if (instance.includes('instagram') || instance.includes('ig') || sourceChannel === 20) {
+    return 'IG';
   }
 
-  switch (sourceChannel) {
-    case 1:
-    case 2:
-      return 'Webchat';
-    case 18:
-      return 'Whatsapp';
-    case 19:
-      return 'Messenger';
-    case 20:
-      return 'Instagram';
-    default:
-      return conv.channel_instance || 'Whatsapp';
-  }
+  return 'Website';
 }
 
 async function main() {

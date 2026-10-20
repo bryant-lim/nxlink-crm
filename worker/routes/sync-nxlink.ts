@@ -198,7 +198,7 @@ export async function runNxlinkSync(env: Env) {
   }
 
   if (!token) {
-    token = 'eyJhbGciOiJIUzI1NiJ9.eyJ1SWQiOjU3OTk0LCJkZXZpY2VVbmlxdWVJZGVudGlmaWNhdGlvbiI6IjQxOTNlYjUwLWJhZWItMTFmMS04NWI5LTgxOTNmODA2MGY2MSIsInV1SWQiOiI2YWI5ZGM3Y2U0YjA3YTQ1ZjQ0MDQ1ODYifQ.BidmK5Cfd2SGlfej8l7QsgV5eCkjph8X_YoTPFtan8E';
+    token = 'eyJhbGciOiJIUzI1NiJ9.eyJ1SWQiOjU3OTk0LCJkZXZpY2VVbmlxdWVJZGVudGlmaWNhdGlvbiI6IjUxYjg2NzMwLWMyZmQtMTFmMS05NWNiLTQ1YmViZmRmZDI4YSIsInV1SWQiOiI2YWM3NjZjM2U0YjA3YTQ1OGU3ZjJjZjkifQ._0o_QHTlj6IGHI277jWFFUcsr3yIoI63S1h0mwTVKVY';
   }
 
   // Hard guard: verify active session belongs strictly to Tenant 4600
