@@ -170,7 +170,7 @@ function resolveChannel(conv) {
   const sourceChannel = conv.source_channel || conv.sourceChannel;
   const instance = (conv.channel_instance || conv.channelInstance || '').toLowerCase();
 
-  if (instance.includes('whatsapp') || instance.includes('wa') || sourceChannel === 18) {
+  if (sourceChannel === 11 || sourceChannel === 18 || instance.includes('whatsapp') || instance.includes('wa')) {
     return 'WA';
   }
   if (instance.includes('messenger') || instance.includes('fb') || instance.includes('facebook') || sourceChannel === 19) {

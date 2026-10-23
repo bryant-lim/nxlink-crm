@@ -155,13 +155,13 @@ function resolveChannel(conv: any): string {
   const instance = (conv.channel_instance || conv.channelInstance || '').toLowerCase();
 
   // Explicit channel markers
-  if (instance.includes('whatsapp') || instance.includes('wa')) {
+  if (sourceChannel === 11 || sourceChannel === 18 || instance.includes('whatsapp') || instance.includes('wa')) {
     return 'WA';
   }
-  if (instance.includes('messenger') || instance.includes('fb') || instance.includes('facebook') || sourceChannel === 19) {
+  if (sourceChannel === 19 || instance.includes('messenger') || instance.includes('fb') || instance.includes('facebook')) {
     return 'FB';
   }
-  if (instance.includes('instagram') || instance.includes('ig') || sourceChannel === 20) {
+  if (sourceChannel === 20 || instance.includes('instagram') || instance.includes('ig')) {
     return 'IG';
   }
 
