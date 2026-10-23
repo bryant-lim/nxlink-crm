@@ -1,0 +1,64 @@
+name: Refresh NxLink Platform Token
+
+on:
+  schedule:
+    # Runs automatically every 3 days at 00:00 UTC
+    - cron: '0 0 */3 * *'
+  workflow_dispatch: # Allows manual trigger anytime from GitHub Actions tab
+
+jobs:
+  refresh-token:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Playwright & Chromium
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Generate Fresh NxLink Token
+        env:
+          NXLINK_ACCOUNT: ${{ secrets.NXLINK_ACCOUNT }}
+          NXLINK_PASSWORD: ${{ secrets.NXLINK_PASSWORD }}
+        run: |
+          # Write credentials file temporarily in runner
+          printf "%s\n%s\n" "$NXLINK_ACCOUNT" "$NXLINK_PASSWORD" > .nxlink_creds
+          chmod 600 .nxlink_creds
+
+          # Fetch token
+          TOKEN=$(python3 nxlink_get_plat_token.py --no-session)
+
+          # Delete credentials file immediately
+          rm -f .nxlink_creds
+
+          # Safety check
+          if [ -z "$TOKEN" ]; then
+            echo "Error: Failed to obtain NxLink plat_token" >&2
+            exit 1
+          fi
+
+          # Mask token so it is never exposed in GitHub logs
+          echo "::add-mask::$TOKEN"
+          echo "NXLINK_TOKEN=$TOKEN" >> $GITHUB_ENV
+
+      - name: Update Cloudflare Worker Secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "$NXLINK_TOKEN" | npx wrangler secret put NXLINK_PLAT_TOKEN -c wrangler.jsonc
